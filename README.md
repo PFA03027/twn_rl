@@ -1,2 +1,2 @@
 # twn_rl
-Reinforce experiment of my study for two wheel machine
+Reinforcement learning experiment of my study for two wheel machine
