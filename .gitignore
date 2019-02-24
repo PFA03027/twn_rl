@@ -1,0 +1,12 @@
+.bak
+__pycache__
+.vscode
+/results*
+/agent*
+/test
+/out
+/__pycache__
+/graph_log*
+/graph_log_old*
+/test_out*
+
