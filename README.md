@@ -17,6 +17,6 @@ If you would like to execute demo with the learned data, please copy "ok_agent_c
 
 
 ## About the code
-This codes refer Chainerrl example.
+This code is created based on Chainerrl example.
 
 
