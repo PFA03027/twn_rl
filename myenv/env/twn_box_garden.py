@@ -362,13 +362,30 @@ class training_type4(training_base):
             dist = TWN_BoxGardenEnv.wall_area_range
         return np.random.uniform(-dist, dist, 2).reshape(2,1)
 
+class training_type5(training_base):
+    def check_end_status(self, obs, reward_map, status_get_eb_flag):
+        self.set_end_status(status_get_eb_flag)
+
+    def get_new_eb_pos(self):
+        self.try_count += 1
+        ans = np.random.uniform(-1.0, 1.0, 2).reshape(2,1)
+        if self.try_count%4 == 0:
+            ans += np.array([ 9.0,  9.0]).reshape(2,1)
+        elif self.try_count%4 == 1:
+            ans += np.array([ 9.0, -9.0]).reshape(2,1)
+        elif self.try_count%4 == 2:
+            ans += np.array([-9.0, -9.0]).reshape(2,1)
+        else:
+            ans += np.array([-9.0,  9.0]).reshape(2,1)
+        return ans
+
 
 
 class TWN_BoxGardenEnv(gym.Env):
     eb_enagy = 300
     wall_area_range = 15.0
     
-    def __init__(self, discrate_action=True, history_size=1, renderable=True):
+    def __init__(self, discrate_action=True, history_size=1, renderable=True, twn_operation_type=0):
         self.logger = logging.getLogger(__name__)
         #self.logger.setLevel(logging.WARNING)
         self.logger.setLevel(logging.DEBUG)
@@ -383,7 +400,10 @@ class TWN_BoxGardenEnv(gym.Env):
                 bg_obj.circle_object(pos=np.array([ 5.0, -5.0]), r=1.0)
                 ]
 
-        self.twn = twn.TwoWheelMover_SetWheelVec()
+        if twn_operation_type == 0:
+            self.twn = twn.TwoWheelMover_SetWheelVec()
+        elif twn_operation_type == 1:
+            self.twn = twn.TwoWheelMover_SetWheelAccel()
         self.my_car = my_car_obj(pos=self.twn.pos, rot_theata=self.twn.GetRotTheata())
         
         self.eb = bg_obj.circle_object(pos=np.array([2.0, 2.0]), r=0.05)    # 目標の物体
@@ -397,8 +417,8 @@ class TWN_BoxGardenEnv(gym.Env):
         
         twn.TwoWheelMover.max_wheel_vec =  0.5
         twn.TwoWheelMover.min_wheel_vec = -0.5
-        twn.TwoWheelMover.max_wheel_acc =  0.05
-        twn.TwoWheelMover.min_wheel_acc = -0.05
+        twn.TwoWheelMover.max_wheel_acc =  0.015
+        twn.TwoWheelMover.min_wheel_acc = -0.015
         
         self.delta_t = 0.02    # 20msecで、更新
         self.num_delta_t_per_action = 10
@@ -418,13 +438,20 @@ class TWN_BoxGardenEnv(gym.Env):
         self.action_space_type = discrate_action    # True = 離散タイプ
         if self.action_space_type:
             self.logger.info("action Discrete")
-            self.action_space_divide = 2
+            self.action_space_divide = 4
             self.action_space_divide_plus1 = self.action_space_divide + 1
             self.action_space = spaces.Discrete(self.action_space_divide_plus1 * self.action_space_divide_plus1)
-            self.action_space_low  = np.array([twn.TwoWheelMover.min_wheel_vec, twn.TwoWheelMover.min_wheel_vec])
-            self.action_space_high = np.array([twn.TwoWheelMover.max_wheel_vec, twn.TwoWheelMover.max_wheel_vec])
+            if twn_operation_type == 0:
+                self.action_space_low  = np.array([twn.TwoWheelMover.min_wheel_vec, twn.TwoWheelMover.min_wheel_vec])
+                self.action_space_high = np.array([twn.TwoWheelMover.max_wheel_vec, twn.TwoWheelMover.max_wheel_vec])
+            elif twn_operation_type == 1:
+                self.action_space_low  = np.array([twn.TwoWheelMover.min_wheel_acc, twn.TwoWheelMover.min_wheel_acc])
+                self.action_space_high = np.array([twn.TwoWheelMover.max_wheel_acc, twn.TwoWheelMover.max_wheel_acc])
         else:
-            self.action_space = spaces.Box(np.array([twn.TwoWheelMover.min_wheel_vec, twn.TwoWheelMover.min_wheel_vec]), np.array([twn.TwoWheelMover.max_wheel_vec, twn.TwoWheelMover.max_wheel_vec]))
+            if twn_operation_type == 0:
+                self.action_space = spaces.Box(np.array([twn.TwoWheelMover.min_wheel_vec, twn.TwoWheelMover.min_wheel_vec]), np.array([twn.TwoWheelMover.max_wheel_vec, twn.TwoWheelMover.max_wheel_vec]))
+            elif twn_operation_type == 1:
+                self.action_space = spaces.Box(np.array([twn.TwoWheelMover.min_wheel_acc, twn.TwoWheelMover.min_wheel_acc]), np.array([twn.TwoWheelMover.max_wheel_acc, twn.TwoWheelMover.max_wheel_acc]))
             self.logger.info("action Box: (low, {}), (high, {}) ".format(self.action_space.low, self.action_space.high))
         
         # 観測データのヒストリーサイズ
@@ -434,6 +461,8 @@ class TWN_BoxGardenEnv(gym.Env):
         rot_speed_minmax = self.twn.GetRotateSpeedMinMax()
         low1 = np.array([twn.TwoWheelMover.min_wheel_vec, twn.TwoWheelMover.min_wheel_acc, rot_speed_minmax[0], 0])
         high1 = np.array([twn.TwoWheelMover.max_wheel_vec, twn.TwoWheelMover.max_wheel_acc, rot_speed_minmax[1], twn.TwoWheelMover.max_enagy])
+        self.noise_param_twn_state_mean = [0.0, 0.0, 0.0, 0.0]
+        self.noise_param_twn_state_var  = (high1 - low1) * 0.003
 
         # 視線センサーの状態
         low2, high2 = my_car_obj.senser_minmax()
@@ -473,7 +502,7 @@ class TWN_BoxGardenEnv(gym.Env):
         
         self.reward_scalor = 1.0
         
-        self.trainers = [training_type1(), training_type2(), training_type3(), training_type4()]
+        self.trainers = [training_type1(), training_type2(), training_type3(), training_type4(), training_type5()]
         self.current_trainer = self.trainers[0]
 
     def collision_my_car(self):
@@ -547,6 +576,10 @@ class TWN_BoxGardenEnv(gym.Env):
         # 自身の情報を集める
         rot_speed = self.twn.GetRotateSpeed()
         self.ob1 = np.array([self.twn.wheel_vec[0], self.twn.wheel_vec[1], rot_speed, self.twn.enagy], dtype=np.float32)
+        ob1_noise_list = []
+        for m, v in zip(self.noise_param_twn_state_mean, self.noise_param_twn_state_var):
+            ob1_noise_list.append(random.gauss(m,v))
+        self.ob1 += np.array(ob1_noise_list, dtype=np.float32)
 
         # 視線交差確認で距離を求め、ob2の更新
         self.ob2 = np.empty(my_car_obj.num_of_ray, dtype=np.float32)
@@ -568,8 +601,8 @@ class TWN_BoxGardenEnv(gym.Env):
         ob3_a = self.eb.pos - self.twn.pos
         ob3_b = np.linalg.norm(ob3_a)
         ob3_c = ob3_a / ob3_b
-        ob3_c = my_car_obj.get_rot_mat( - self.twn.GetRotTheata() ).dot(ob3_c)
-        ob3_d = 1.0/(1.0+ob3_b-self.my_car.radius)
+        ob3_c = my_car_obj.get_rot_mat( - self.twn.GetRotTheata() + random.gauss(0.0,0.2/180.0*math.pi) ).dot(ob3_c)
+        ob3_d = 1.0/(1.0+ob3_b-self.my_car.radius) + random.gauss(0.0,0.003)
         self.ob3 = np.array([ob3_c[0], ob3_c[1], ob3_d], dtype=np.float32)
 
         # 観測情報を構築する
@@ -812,18 +845,21 @@ class TWN_BoxGardenEnv(gym.Env):
         elif self.get_eb_count < 200:
             self.training_step = 1
             self.current_trainer = self.trainers[self.try_count % 2]
-        elif self.get_eb_count < 400:
+        elif self.get_eb_count < 300:
             self.training_step = 2
             self.current_trainer = self.trainers[self.try_count % 3]
-        else:
+        elif self.get_eb_count < 400:
             self.training_step = 3
             self.current_trainer = self.trainers[self.try_count % 4]
-
+        else:
+            self.training_step = 4
+            self.current_trainer = self.trainers[3+self.try_count % 2]
+        
         self.twn.Reset()
         for collision_retry in range(10):
             new_pos = self.current_trainer.get_new_eb_pos()
             if not self.collision_eb(new_pos):
-                #print('step{} EB count: {}, pos {}'.format(self.training_step, self.get_eb_count, new_pos.reshape(1,2)))
+                print('step{} EB count: {}, pos {}, trainer {}'.format(self.training_step, self.get_eb_count, new_pos.reshape(1,2), self.current_trainer))
                 break
         if self.twn_bg_draw is not None:
             self.eb.update_pos_attrs(new_pos, self.eb.radius)
@@ -834,7 +870,7 @@ class TWN_BoxGardenEnv1(TWN_BoxGardenEnv):
     '''
     def __init__(self, discrate_action=True):
         super().__init__(discrate_action, history_size=1, renderable=True)
-        print('TWN_BoxGardenEnv2: history size {}  renderable=True'.format(self.obs_hist_num))
+        print('TWN_BoxGardenEnv1: history size {}  renderable=True'.format(self.obs_hist_num))
 
 #    def step(self, action):
 #        observation, reward, done, info = super().step(action)
@@ -908,6 +944,15 @@ class TWN_BoxGardenEnv5(TWN_BoxGardenEnv):
         super().__init__(discrate_action=False, history_size=1, renderable=False)
         print("TWN_BoxGardenEnv5: Continuous action space: history size ", self.obs_hist_num)
 
+class TWN_BoxGardenEnv6(TWN_BoxGardenEnv):
+    '''
+    TWN_BoxGardenEnv1のWheelの加速度制御型
+    '''
+    def __init__(self, discrate_action=True):
+        super().__init__(discrate_action, history_size=1, renderable=True, twn_operation_type=1)
+        print('TWN_BoxGardenEnv6: history size {}  renderable=True'.format(self.obs_hist_num))
+
+        
 if __name__ == '__main__':
     mp.freeze_support()
 

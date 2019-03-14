@@ -29,4 +29,9 @@ register(
     id='twm_box_garden-v5',
     entry_point='myenv.env:TWN_BoxGardenEnv5',
 )
+register(
+    id='twm_box_garden-v6',
+    entry_point='myenv.env:TWN_BoxGardenEnv6',
+)
+
 

@@ -312,8 +312,11 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
 
             super().__init__()
             with self.init_scope():
-#                self.ml5 = links.MLP(n_in_elements, n_actions, (n_in_elements*2, n_in_elements//2), nonlinearity=F.leaky_relu)
-                self.ml5 = links.MLP(n_in_elements, n_actions, (n_in_elements*2, n_actions*n_in_elements//2), nonlinearity=F.leaky_relu)
+                self.l4 = L.Linear(n_in_elements, n_in_elements*2)
+                self.action_links_list = []
+                for i in range(n_actions):
+                    action_links = links.MLP(n_in_elements*2, 1, (n_in_elements//2,), nonlinearity=F.leaky_relu)
+                    self.action_links_list.append(action_links)
 
             self.explor_rate = explor_rate
             
@@ -326,7 +329,13 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
                 type: Variable of Chainer
                 Q values of all actions
             '''
-            h7 = self.ml5(x)
+            h4 = F.leaky_relu(self.l4(x))
+            action_Qvalues = []
+            for act_mlp in self.action_links_list:
+                qout = act_mlp(h4)
+                action_Qvalues.append(qout)
+            
+            h7 = F.concat(action_Qvalues, axis=1)
             
             self.debug_info = (h7)
     
@@ -385,7 +394,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
         #replay_buffer = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedEpisodicReplayBuffer(capacity=10 ** 6)
-        replay_buffer_q_func = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
+        replay_buffer_q_func = success_buffer_replay.ActionFareSamplingReplayBuffer(capacity=10 ** 6)
     
         phi = lambda x: x.astype(np.float32, copy=False)
         self.agent = chainerrl.agents.DoubleDQN(

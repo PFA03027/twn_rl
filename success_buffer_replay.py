@@ -148,4 +148,95 @@ class SuccessPrioReplayBuffer(chainerrl.replay_buffer.AbstractReplayBuffer):
 
         self.current_episode_R = 0.0
 
+class ActionFareSamplingReplayBuffer(chainerrl.replay_buffer.AbstractReplayBuffer):
+
+    def __init__(self, capacity=None):
+        self.action_base_experience = {}
+        self.action_base_experience_count = {}
+        self.action_memory = {}
+
+        self.current_episode = []
+
+        if capacity is None:
+            self.capacity = 10 ** 6
+        else:
+            self.capacity = capacity
+
+        self.all_step_count = 0
+
+
+    def append(self, state, action, reward, next_state=None, next_action=None,
+               is_state_terminal=False, **kwargs):
+        experience = dict(state=state, action=action, reward=reward,
+                          next_state=next_state, next_action=next_action,
+                          is_state_terminal=is_state_terminal,
+                          **kwargs)
         
+        self.current_episode.append(experience)
+
+        if (action in self.action_base_experience) == False:
+            self.action_base_experience[action] = []
+            self.action_base_experience_count[action] = 0
+        
+        self.action_base_experience[action].append(experience)
+        self.action_base_experience_count[action] += 1
+        
+        self.all_step_count += 1
+        
+        if self.all_step_count > self.capacity:
+            max_count = 0
+            max_action = None
+            for ma, mc in self.action_base_experience_count.items():
+                if mc > max_count:
+                    max_count = mc
+                    max_action = ma
+            if max_action is not None:
+                self.action_base_experience[max_action].pop(0)
+                self.all_step_count -= 1
+                self.action_base_experience_count[max_action] -= 1
+
+    def sample(self, n):
+        count_sample = 0
+        ans = []
+        es = n//(len(self.action_memory.keys())+1)
+        if es < 1:
+            es = 1
+        
+        for ram in self.action_memory.keys():
+            n_s = min((len(self.action_memory[ram]), es))
+            if (count_sample+n_s) > n:
+                n_s = n - count_sample
+                if n_s <= 0:
+                    break
+                ans.extend(self.action_memory[ram].sample(n_s))
+                count_sample += n_s
+                break
+            else:
+                ans.extend(self.action_memory[ram].sample(n_s))
+                count_sample += n_s
+
+        if count_sample < n:
+            n_s = min((len(self.current_episode), n - count_sample))
+            #ans.extend(random.sample(self.current_episode, n_s))
+            ans.extend(self.current_episode[len(self.current_episode)-1-n_s:len(self.current_episode)-1])
+
+        return ans
+
+    def __len__(self):
+        return self.all_step_count
+
+    def save(self, filename):
+        pass
+
+    def load(self, filename):
+        pass
+
+    def stop_current_episode(self):
+        for ac in self.action_base_experience.keys():
+            self.action_memory[ac] = RandomAccessQueue()
+            self.action_memory[ac].extend(self.action_base_experience[ac])
+            
+        if self.current_episode:
+            self.current_episode = []
+
+

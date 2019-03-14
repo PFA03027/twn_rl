@@ -121,6 +121,10 @@ class TwoWheelMover_SetWheelVec(TwoWheelMover):
     def SetOperationParam(self, w1, w2):
         super().SetWheelVec(w1, w2)
     
+class TwoWheelMover_SetWheelAccel(TwoWheelMover):
+    def SetOperationParam(self, w1, w2):
+        super().SetWheelAccel(w1, w2)
+    
 class TwoWheelMover_SetRotOnly(TwoWheelMover):
     def SetOperationParam(self, w1, w2):
         super().SetRotOnly(w1, w2)

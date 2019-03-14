@@ -12,6 +12,7 @@ from myenv.env.twn_box_garden import TWN_BoxGardenEnv2
 from myenv.env.twn_box_garden import TWN_BoxGardenEnv3
 from myenv.env.twn_box_garden import TWN_BoxGardenEnv4
 from myenv.env.twn_box_garden import TWN_BoxGardenEnv5
+from myenv.env.twn_box_garden import TWN_BoxGardenEnv6
 from . import id_generator
 from . import drawing_trace2
 from . import two_wheel_mover

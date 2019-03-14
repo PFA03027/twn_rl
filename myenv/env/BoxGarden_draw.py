@@ -131,6 +131,7 @@ class BoxGarden_draw():
         self.mq_f_client = None     # クライアント側からのメッセージを受け取るためのメッセージキュー
         self.mq_to_scn = None       # matplotの制御スレッドへメッセージを送るためのメッセージキュー
         self.access_lock = None     # メッセージ処理スレッドとmatplot制御スレッドとの排他制御用ロック
+        self.updated_marker = False
     
     # -------------------------
     # Sender side APIs
@@ -154,6 +155,8 @@ class BoxGarden_draw():
 
     def start_screen(self):
         self.scn = dt2.screen(self.subplot_num)
+        self.updated_marker = True
+
 
     def process_msg(self, msg):
         if msg.mid == bg_msg_ID.ADD:
@@ -275,10 +278,14 @@ def dt2_show(bg_draw, update_interval):
         #print("anime frame:", data)
 
         with bg_draw.access_lock:
-            bg_draw.update_subplot(data[0])
+            if bg_draw.updated_marker:
+                bg_draw.update_subplot(data[0])
+    
+                if data[1] == RecordingStatus.VIDEO_RECORDING:
+                    writer.grab_frame()
+            
+            bg_draw.updated_marker = False
 
-            if data[1] == RecordingStatus.VIDEO_RECORDING:
-                writer.grab_frame()
 
     # animation.FuncAnimation()の戻り値を保持する変数を定義しておかないと、funcの呼び出しが開始されない。GCでオブジェクトが捨てられてしまう場合があるのかもしれない。
     with bg_draw.access_lock:
@@ -292,6 +299,7 @@ def message_loop(bg_draw):
     while True:
         msg = bg_draw.mq_f_client.get()
         with bg_draw.access_lock:
+            bg_draw.updated_marker = True
             if msg.mid == bg_msg_ID.START:
                 bg_draw.mq_to_scn.put(msg)
                 print('command bg_msg_ID.START pass to anime')

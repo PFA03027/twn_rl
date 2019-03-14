@@ -31,6 +31,11 @@ import success_buffer_replay
 
 import twn_DDQN_agent_Type1
 import twn_DDQN_agent_Type2
+import twn_DDQN_agent_Type3
+import twn_DDQN_agent_Type4
+import twn_DDQN_agent_Type5
+import twn_DDQN_agent_Type6
+import twn_DDQN_agent_Type7
 
 
 class Evaluation_Cmd(Enum):
@@ -51,15 +56,20 @@ def func_traning(args, mq, env_name, func_agent_generation):
     max_number_of_steps = 3000  #総試行回数
     num_episodes = 500  #総試行回数
     episode = 0
+    explor_rate = None
+    end_count = num_episodes
     
     load_flag = False
     if len(args.load) > 0:
         load_flag = True
-    agent = func_agent_generation(args, env, load_flag)
+        explor_rate = 0.5
+        env.get_eb_count = 400
+        end_count += env.get_eb_count
+    agent = func_agent_generation(args, env, load_flag, explor_rate)
     
 
 #    for episode in range(num_episodes):  #試行数分繰り返す
-    while env.get_eb_count < num_episodes:
+    while env.get_eb_count < end_count:
         episode += 1
         observation = env.reset()
         done = False
@@ -77,7 +87,7 @@ def func_traning(args, mq, env_name, func_agent_generation):
                 if isinstance(agent, chainerrl.agents.DoubleDQN):
                     av_data = agent.q_function.model.debug_info[0].data
                     tmp_add_info = [av_data.reshape(1,-1)]
-                elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN):
+                elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN):
                     av_data = agent.agent.q_function.model.debug_info[0].data
                     tmp_add_info = [av_data.reshape(1,-1)]
                     if agent.cnn_ae.debug_info is not None:
@@ -99,7 +109,8 @@ def func_traning(args, mq, env_name, func_agent_generation):
         logger.info('episode: {}  R: {}  statistics [(average_q: {}), (average_loss: {})]'.format(episode, R, stat[0][1], stat[1][1]))
         agent.save('agent')
         logger.info('Stored agent {}'.format('agent'))
-        mq.put(Evaluation_Cmd.START_EVALUATION)
+        if mq is not None:
+            mq.put(Evaluation_Cmd.START_EVALUATION)
 
     logger.info('Finish training.')
 
@@ -136,7 +147,7 @@ def func_demo(args, mq, env_name, func_agent_generation):
                 if (t%5==0) or done:
                     if isinstance(agent, chainerrl.agents.DoubleDQN):
                         av_data = agent.q_function.model.debug_info[0].data
-                    elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN):
+                    elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN):
                         av_data = agent.agent.q_function.model.debug_info[0].data
                     env.render(add_info=[av_data.reshape(1,-1)])
                     stat = agent.get_statistics()
@@ -176,7 +187,7 @@ def func_demo(args, mq, env_name, func_agent_generation):
                             if t%10==0:
                                 if isinstance(agent, chainerrl.agents.DoubleDQN):
                                     av_data = agent.q_function.model.debug_info[0].data
-                                elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN):
+                                elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN):
                                     av_data = agent.agent.q_function.model.debug_info[0].data
                                 env.render(add_info=[av_data.reshape(1,-1)])
                                 stat = agent.get_statistics()
@@ -235,6 +246,7 @@ if __name__ == '__main__':
     parser.add_argument('--minibatch-size', type=int, default=200)
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--demo', action='store_true')
+    parser.add_argument('--withdemo', action='store_true')
     parser.add_argument('--use-bn', action='store_true', default=False)
     parser.add_argument('--monitor', action='store_true')
     parser.add_argument('--reward-scale-factor', type=float, default=1e-2)
@@ -246,8 +258,13 @@ if __name__ == '__main__':
     env_name = 'twm_box_garden-v1'
     
 #    func_agent_generation = twn_DDQN_agent_Type1.func_agent_generation
-    func_agent_generation = twn_DDQN_agent_Type2.func_agent_generation
-    
+#    func_agent_generation = twn_DDQN_agent_Type2.func_agent_generation
+    func_agent_generation = twn_DDQN_agent_Type3.func_agent_generation
+#    func_agent_generation = twn_DDQN_agent_Type4.func_agent_generation
+#    func_agent_generation = twn_DDQN_agent_Type5.func_agent_generation
+#    func_agent_generation = twn_DDQN_agent_Type6.func_agent_generation
+#    func_agent_generation = twn_DDQN_agent_Type7.func_agent_generation
+   
     if args.demo:
         func_demo(args, None, env_name, func_agent_generation)
 
@@ -261,7 +278,7 @@ if __name__ == '__main__':
 #        demo_process.join()
 
 
-    else:
+    elif args.withdemo:
         mq_to_demo = mp.Queue()
 
         demo_process = mp.Process(target=func_demo, args=(args, mq_to_demo, env_name, func_agent_generation))
@@ -271,6 +288,8 @@ if __name__ == '__main__':
         mq_to_demo.put(Evaluation_Cmd.FINISH)
         
         demo_process.join()
+    else:
+        func_traning(args, None, env_name, func_agent_generation)
 
 
     logger.info('Exit')
