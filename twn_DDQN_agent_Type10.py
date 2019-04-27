@@ -150,7 +150,7 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
         
         """
     
-        def __init__(self, num_in_elements, num_in_channel, n_clasfy_ray, name=None, dropout_rate=0.0):
+        def __init__(self, num_in_elements, num_in_channel, n_clasfy_ray, name=None, dropout_rate=0.0, nonliner=F.sigmoid):
             '''
             num_in_elements: number of　output elements per output channel of CNN as input
             num_in_channel: number of　output channel of CNN as input
@@ -165,6 +165,8 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
             self.n_clasfy_ray = n_clasfy_ray
     
             self.dropout_rate = dropout_rate
+
+            self.nonliner = nonliner
     
             super().__init__()
             with self.init_scope():
@@ -173,9 +175,9 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
             
         def fwd(self, state):
             if self.dropout_rate == 0.0:
-                h1 = F.sigmoid(self.l_in(state))
+                h1 = self.nonliner(self.l_in(state))
             else:
-                h1 = F.dropout(F.sigmoid(self.l_in(state)), ratio=self.dropout_rate)
+                h1 = F.dropout(self.nonliner(self.l_in(state)), ratio=self.dropout_rate)
 
             return h1
 
@@ -192,7 +194,7 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
             '''
             return self.fwd_loss(state)[1]
 
-    saved_attributes = ("model1", "model2", "model3")
+    saved_attributes = ("model1", "model2", "model3", "model4", "model5", "model6", "model7")
 
     def __init__(self, num_ray, n_clasfy_ray):
 
@@ -232,10 +234,38 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
         self.model3 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Clasfy(
                 self.model2.num_of_pooling_out_elements,
                 out_channel_2nd,
-                self.n_clasfy_ray,
-                name="Clasify")
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.8),
+                name="Clasify1",
+                nonliner=F.leaky_relu)
 
-        self.model_list = [self.model1, self.model2, self.model3]
+        self.model4 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Clasfy(
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.8),
+                1,
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.6),
+                name="Clasify2",
+                nonliner=F.leaky_relu)
+
+        self.model5 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Clasfy(
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.6),
+                1,
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.4),
+                name="Clasify3",
+                nonliner=F.leaky_relu)
+
+        self.model6 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Clasfy(
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.4),
+                1,
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.2),
+                name="Clasify4",
+                nonliner=F.leaky_relu)
+
+        self.model7 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Clasfy(
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.2),
+                1,
+                self.n_clasfy_ray,
+                name="Clasify5")
+
+        self.model_list = [self.model1, self.model2, self.model3, self.model4, self.model5, self.model6, self.model7]
         
         self.debug_info = None
         
@@ -243,8 +273,12 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
         h1 = F.max_pooling_nd(self.model1.fwd(x), self.pooling_size_1st)
         h2 = F.max_pooling_nd(self.model2.fwd(h1),self.pooling_size_2nd)
         h3 = self.model3.fwd(h2)
+        h4 = self.model4.fwd(h3)
+        h5 = self.model5.fwd(h4)
+        h6 = self.model6.fwd(h5)
+        h7 = self.model7.fwd(h6)
         
-        return h3
+        return h7
 
 
     def __call__(self, x):
@@ -256,10 +290,14 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
         model2_out = self.model2.fwd_loss(h1)
         h2 = F.max_pooling_nd(model2_out[0], self.pooling_size_2nd)
         model3_out = self.model3.fwd_loss(h2)
+        model4_out = self.model4.fwd_loss(model3_out[0])
+        model5_out = self.model5.fwd_loss(model4_out[0])
+        model6_out = self.model6.fwd_loss(model5_out[0])
+        model7_out = self.model7.fwd_loss(model6_out[0])
         
-        self.debug_info = (model1_out, model3_out, model3_out)
+        self.debug_info = (model1_out, model2_out, model3_out, model4_out, model5_out, model6_out, model7_out)
 
-        return [model1_out[1], model2_out[1], model3_out[1]]
+        return [model1_out[1], model2_out[1], model3_out[1], model4_out[1], model5_out[1], model6_out[1], model7_out[1]]
     
     def cleargrads(self):
         for m in self.model_list:
@@ -280,124 +318,6 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
             ans.append(optimizer)
         
         return ans
-
-
-class Qfunc_FC_TWN2_Decompose(Qfunc.StateQFunction, agent.AttributeSavingMixin):
-    """行動価値関数 = Q関数
-
-    Args:
-        decompose_layers: 各層のノード数のリスト。1要素目と、2要素目、3要素目のみを使用する
-        explor_rate=0.0: 探索行動比率（現時点で未使用）
-    """
-
-    class Qfunc_FC_TWN_model_DAE_for_Input(chainer.Chain):
-        """ 
-        レーダーセンサーの入力情報に対する畳み込み層出力後の全結合層
-        特徴抽出ための層となるので、AutoEncoderの手法を利用して、学習を行う。
-        よって、この層は、強化学習の対象とはならない。
-        
-        """
-    
-        def __init__(self, num_in_elements, num_out_elements, name=None, dropout_rate=0.0):
-            '''
-            num_in_elements: number of　input elements
-            num_out_elements: number of　output elements
-            Name: name of this layer
-            dropout_rate: dropout ratio of output layer. this is experimental purpose.
-            '''
-
-            self.num_in_elements = num_in_elements
-            self.num_out_elements = num_out_elements
-    
-            self.dropout_rate = dropout_rate
-    
-            super().__init__()
-            with self.init_scope():
-                self.l_in = L.Linear(self.num_in_elements, self.num_out_elements) #分階層
-                self.l_out = L.Linear(self.num_out_elements, self.num_in_elements) #DAEのための再統合層
-            
-        def fwd(self, state):
-            if self.dropout_rate == 0.0:
-                h1 = F.leaky_relu(self.l_in(state))
-            else:
-                h1 = F.dropout(F.leaky_relu(self.l_in(state)), ratio=self.dropout_rate)
-
-            return h1
-
-        def fwd_loss(self, state):
-            h1 = self.fwd(state)
-            dcnv_out = F.reshape(self.l_out(h1), state.shape)
-            loss = F.mean_squared_error(dcnv_out, state)
-
-            return [h1, loss, dcnv_out, state]
-
-        def __call__(self, state):
-            '''
-            強化学習用のQ関数ではないので、普通にlossを返す
-            '''
-            return self.fwd_loss(state)[1]
-
-    saved_attributes = ("model1", "model2")
-
-    def __init__(self, decompose_layers):
-
-        self.decompose_layers = decompose_layers
-
-        self.model1 = Qfunc_FC_TWN2_Decompose.Qfunc_FC_TWN_model_DAE_for_Input(
-                self.decompose_layers[0],
-                self.decompose_layers[1],
-                name="Decompose 1",
-                dropout_rate=0.8)
-
-        self.model2 = Qfunc_FC_TWN2_Decompose.Qfunc_FC_TWN_model_DAE_for_Input(
-                self.decompose_layers[1],
-                self.decompose_layers[2],
-                name="Decompose 2",
-                dropout_rate=0.5)
-
-        self.model_list = [self.model1, self.model2]
-        
-        self.debug_info = None
-        
-    def fwd(self, x):
-        h1 = self.model1.fwd(x)
-        h2 = self.model2.fwd(h1)
-        
-        return h2
-
-
-    def __call__(self, x):
-        '''
-        強化学習用のQ関数ではないので、普通にlossを返す
-        '''
-        model1_out = self.model1.fwd_loss(x)
-        model2_out = self.model2.fwd_loss(model1_out[0])
-        
-        self.debug_info = (model1_out, model2_out)
-
-        return [model1_out[1], model2_out[1]]
-    
-    def cleargrads(self):
-        for m in self.model_list:
-            m.cleargrads()
-                
-    def gen_setup_optimizer(self, opt_type):
-        '''
-        内部で抱えるそれぞれのモデルに対するそれぞれのOptimizerを生成する
-        
-        return:
-            opt_type: chainer.optimizers.XXX
-        '''
-        ans = []
-        assert issubclass(opt_type,chainer.Optimizer)
-        for m in self.model_list:
-            optimizer = opt_type()
-            optimizer.setup(m)
-            ans.append(optimizer)
-        
-        return ans
-
-
 
 class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.AttributeSavingMixin):
     """行動価値関数 = Q関数
@@ -410,12 +330,14 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
         explor_rate=0.0: 探索行動比率（現時点で未使用）
     """
 
-    class Qfunc_FC_TWN_model_RLLayer(chainer.Chain):
+    class Qfunc_FC_TWN_model_RLLayer(chainer.Chain, agent.AttributeSavingMixin):
         """ 
         強化学習の対象となる層
         """
         
-        def __init__(self, n_in_elements, n_original_input, n_actions, explor_rate=0.0):
+        saved_attributes = ('l4','l5','action_chain_list')
+    
+        def __init__(self, n_in_elements, n_actions, explor_rate=0.0):
             '''
             Q値の範囲が報酬体系によって負の値をとる場合、F.reluは負の値をとれないので、学習に適さない。
             活性化関数は、負の値も取ることが可能なものを選択する必要がある。
@@ -429,15 +351,14 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
             '''
 
             super().__init__()
-
-            self.num_noise_roots = np.array([n_original_input//8, n_original_input//8, n_original_input//8, n_original_input//8])
-
             with self.init_scope():
-                self.l4 = links.MLP(n_in_elements+np.sum(self.num_noise_roots), n_original_input//2, (n_original_input,), nonlinearity=F.leaky_relu)
-                self.action_links_list = []
+                self.l4 = links.MLP(n_in_elements, int(n_in_elements*1.2), (n_in_elements*2, int(n_in_elements*1.8), int(n_in_elements*1.5)), nonlinearity=F.leaky_relu)
+                self.l5 = links.MLP(int(n_in_elements*1.2)+4, (n_in_elements*2)//3, (n_in_elements, int(n_in_elements*0.8)), nonlinearity=F.leaky_relu)
+                local_action_links_list = []
                 for i in range(n_actions):
-                    action_links = links.MLP(n_original_input//2, 1, (n_original_input//4,), nonlinearity=F.leaky_relu)
-                    self.action_links_list.append(action_links)
+                    action_links = links.MLP((n_in_elements*2)//3, 1, (n_in_elements//2,), nonlinearity=F.leaky_relu)
+                    local_action_links_list.append(action_links)
+                self.action_chain_list = chainer.ChainList(*local_action_links_list)
 
             self.explor_rate = explor_rate
             
@@ -450,28 +371,22 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
                 type: Variable of Chainer
                 Q values of all actions
             '''
-            ss = list(x.shape)
-            ss[1] = self.num_noise_roots[0]
-            noise0 = np.random.normal( 0.0, 1.0, ss)
-            ss[1] = self.num_noise_roots[1]
-            noise1 = np.random.uniform(low=-1.0, high=1.0, size=ss)
-            ss[1] = self.num_noise_roots[2]
-            noise2 = np.random.normal(-1.0, 0.5, ss)
-            ss[1] = self.num_noise_roots[3]
-            noise3 = np.random.normal( 1.0, 0.5, ss)
-            
-            xx = np.hstack([x, noise0, noise1, noise2, noise3]).astype(np.float32)
-#            print("x: ", x.shape)
-#            print("xx: ", xx.shape)
-#            print("noise0: ", noise0.shape)
-#            print("noise1: ", noise1.shape)
-#            print("noise2: ", noise2.shape)
-#            print("noise3: ", noise3.shape)
 
-            h4 = self.l4(xx)
+            ss = list(x.shape)
+            ss[1] = 1
+            noise0 = np.random.normal( 0.0, 0.5, ss)
+            noise1 = np.random.normal(-1.0, 0.5, ss)
+            noise2 = np.random.normal( 1.0, 0.5, ss)
+            noise3 = np.random.uniform(low=-1.0, high=1.0, size=ss)
+            
+            rdata = np.hstack([noise0, noise1, noise2, noise3]).astype(np.float32)
+
+            h4 = self.l4(x)
+            h4_c = F.concat([h4, chainer.Variable(rdata)], axis=1)
+            h5 = self.l5(h4_c)
             action_Qvalues = []
-            for act_mlp in self.action_links_list:
-                qout = act_mlp(h4)
+            for act_mlp in self.action_chain_list:
+                qout = act_mlp(h5)
                 action_Qvalues.append(qout)
             
             h7 = F.concat(action_Qvalues, axis=1)
@@ -483,11 +398,10 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
 
     saved_attributes = ('model',)
 
-    def __init__(self, n_in_elements, n_inside_layer, n_actions, explor_rate=0.0):
+    def __init__(self, n_in_elements, n_actions, explor_rate=0.0):
         super().__init__(
                 model = Qfunc_FC_TWN_RL.Qfunc_FC_TWN_model_RLLayer(
                         n_in_elements,
-                        n_inside_layer,
                         n_actions,
                         explor_rate=0.0
                         )
@@ -496,7 +410,7 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
 
 class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
 
-    saved_attributes = ['cnn_ae', 'decompose_dae', 'q_func', 'q_func_opt']
+    saved_attributes = ['cnn_ae', 'q_func', 'q_func_opt']
 
     def __init__(self, args, env, load_flag=False, explor_rate=None):
         super().__init__()
@@ -508,40 +422,33 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
         self.update_interval = 10
         self.target_update_interval = 200
         self.replay_start_size = 1000
-        self.minibatch_size = 256
+        self.minibatch_size = 512
 
         gamma = 0.99
         alpha = 0.5
         
         n_clasfy_ray = 32
 
-        # レーダー信号の入力に対する特徴抽出層の初期化
+#        self.q_func = Qfunc_FC_TWN2_Vision(env.obs_size_list[0], env.obs_size_list[1], env.obs_size_list[2], env.action_space.n)
         self.cnn_ae = Qfunc_FC_TWN2_Vision(self.num_ray, n_clasfy_ray)
         self.cnn_ae_opts = self.cnn_ae.gen_setup_optimizer(chainer.optimizers.Adam)
         self.replay_buffer_cnn_ae = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
 
-        # 入力信号に対する情報分階層の初期化
-        num_in_decompose = self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status
-        self.decompose_dae = Qfunc_FC_TWN2_Decompose((num_in_decompose, num_in_decompose*2, num_in_decompose*4))
-        self.decompose_dae_opts = self.decompose_dae.gen_setup_optimizer(chainer.optimizers.Adam)
-        self.replay_buffer_decompose_dae = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
-
-        # 強化学習層の初期化
-        self.q_func = Qfunc_FC_TWN_RL(num_in_decompose*4, num_in_decompose//2, env.action_space.n)
+        self.q_func = Qfunc_FC_TWN_RL(self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status, env.action_space.n)
         self.q_func_opt = chainer.optimizers.Adam(eps=1e-2)
         self.q_func_opt.setup(self.q_func)
         if load_flag:
             if explor_rate is None:
                 explorer = chainerrl.explorers.ConstantEpsilonGreedy(epsilon=0.05, random_action_func=env.action_space.sample)
             else:
-                explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=explor_rate, end_epsilon=0.05, decay_steps=50000, random_action_func=env.action_space.sample)
+                explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=explor_rate, end_epsilon=0.05, decay_steps=500000, random_action_func=env.action_space.sample)
         else:
-            explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.05, decay_steps=50000, random_action_func=env.action_space.sample)
+            explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.05, decay_steps=500000, random_action_func=env.action_space.sample)
     
         #replay_buffer = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedEpisodicReplayBuffer(capacity=10 ** 6)
-        replay_buffer_q_func = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
+        replay_buffer_q_func = success_buffer_replay.ActionFareSamplingReplayBuffer(capacity=10 ** 6)
     
         phi = lambda x: x.astype(np.float32, copy=False)
         self.agent = chainerrl.agents.DoubleDQN(
@@ -557,7 +464,6 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
         
         self.t = 0
         self.last_losses = None
-        self.last_losses2 = None
     
     def obs_split_twn(self, obs):
         state32 = obs.astype(np.float32)
@@ -570,7 +476,6 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
         return twn_status, x, eb_status
     
     def update(self):
-        # レーダー信号の入力に対する特徴抽出層の学習処理
         sample_obs = self.replay_buffer_cnn_ae.sample(self.minibatch_size)
         obs_np = np.array([elem['state'] for elem in sample_obs])
         
@@ -582,18 +487,6 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
             opt.update()
 
 
-        # 入力信号に対する情報分階層の学習処理
-        sample_obs = self.replay_buffer_decompose_dae.sample(self.minibatch_size)
-        obs_np = np.array([elem['state'] for elem in sample_obs])
-        
-        self.decompose_dae.cleargrads()
-        self.last_losses2 = self.decompose_dae(obs_np)
-        for loss in self.last_losses2:
-            loss.backward()
-        for opt in self.decompose_dae_opts:
-            opt.update()
-
-
     def act_and_train(self, obs, reward):
         """Select an action for training.
 
@@ -602,7 +495,6 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
         """
         self.t += 1
         
-#        print("obs: ", obs.shape)
         twn_status, x, eb_status = self.obs_split_twn(obs)
 
         with chainer.using_config("train", False):
@@ -613,22 +505,12 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
                 x_ray_out = self.cnn_ae.fwd(x.reshape(1,ch,element))
                 x_ray_out_np = x_ray_out.data.reshape(-1)
         
-                h3_c = np.hstack([twn_status, x_ray_out_np, eb_status]).reshape(1,-1)
-#                print("h3_c: ", h3_c.shape)
+                h3_c = np.hstack([twn_status, x_ray_out_np, eb_status])
         
-                self.replay_buffer_decompose_dae.append(h3_c, None, reward)
-        
-                h4 = self.decompose_dae.fwd(h3_c)
-                h4 = h4.reshape(-1)
-#                print("h4: ", h4.shape)
-
-        # 強化学習層の学習は、DoubleDQNに任せている。
-        action = self.agent.act_and_train(h4.data, reward)
+        action = self.agent.act_and_train(h3_c, reward)
         
         if (self.t % self.update_interval) == 0:
             if self.t > self.replay_start_size:
-                # レーダー信号の入力に対する特徴抽出層の学習処理の実施指示
-                # 入力信号に対する情報分階層の学習処理の実施指示
                 self.update()
         
         return action
@@ -647,12 +529,9 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
                 x_ray_out = self.cnn_ae.fwd(x.reshape(1,ch,element))
                 x_ray_out_np = x_ray_out.data.reshape(-1)
         
-                h3_c = np.hstack([twn_status, x_ray_out_np, eb_status]).reshape(1,-1)
+                h3_c = np.hstack([twn_status, x_ray_out_np, eb_status])
         
-                h4 = self.decompose_dae.fwd(h3_c)
-                h4 = h4.reshape(-1)
-
-        action = self.agent.act(h4.data)
+        action = self.agent.act(h3_c)
         
         return action
         
@@ -675,18 +554,11 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
                 x_ray_out = self.cnn_ae.fwd(x.reshape(1,ch,element))
                 x_ray_out_np = x_ray_out.data.reshape(-1)
         
-                h3_c = np.hstack([twn_status, x_ray_out_np, eb_status]).reshape(1,-1)
-                
-                self.replay_buffer_decompose_dae.append(h3_c, None, reward, next_state=None, next_action=None, is_state_terminal=done)
+                h3_c = np.hstack([twn_status, x_ray_out_np, eb_status])
         
-                h4 = self.decompose_dae.fwd(h3_c)
-                h4 = h4.reshape(-1)
-
-        action = self.agent.stop_episode_and_train(h4.data, reward, done)
+        action = self.agent.stop_episode_and_train(h3_c, reward, done)
         
         if self.t > self.replay_start_size:
-            # レーダー信号の入力に対する特徴抽出層の学習処理の実施指示
-            # 入力信号に対する情報分階層の学習処理の実施指示
             self.update()
 
         return action
@@ -698,7 +570,6 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
             None
         """
         self.replay_buffer_cnn_ae.stop_current_episode()
-        self.replay_buffer_decompose_dae.stop_current_episode()
         self.agent.stop_episode()
 
     def save(self, dirname):
@@ -708,7 +579,6 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
             None
         """
         self.cnn_ae.save(os.path.join(dirname, 'cnn_ae'))
-        self.decompose_dae.save(os.path.join(dirname, 'decompose_dae'))
 #        i = 0
 #        for opt in self.cnn_ae_opts:
 #            opt.save(os.path.join(dirname, 'cnn_ae_opts', '{}'.format(i)))
@@ -723,7 +593,6 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
             None
         """
         self.cnn_ae.load(os.path.join(dirname, 'cnn_ae'))
-        self.decompose_dae.load(os.path.join(dirname, 'decompose_dae'))
 #        i = 0
 #        for opt in self.cnn_ae_opts:
 #            opt.load(os.path.join(dirname, 'cnn_ae_opts', '{}'.format(i)))
@@ -741,12 +610,8 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
             Example: [('average_loss': 0), ('average_value': 1), ...]
         """
         ans = []
-
 #        if self.last_losses is not None:
 #            ans.extend([('cnn1_loss', self.last_losses[0].data), ('cnn2_loss', self.last_losses[1].data), ('clasify_loss', self.last_losses[2].data)])
-
-        if self.last_losses2 is not None:
-            ans.extend([('d1_loss', self.last_losses2[0].data), ('d2_loss', self.last_losses2[1].data)])
         ans.extend(self.agent.get_statistics())
         return ans
 

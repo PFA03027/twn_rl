@@ -136,6 +136,11 @@ class my_car_obj(bg_obj.circle_object):
             self.eb_direction.append( 0.0, 0.0 )
             self.eb_direction.append( 0.0, 0.0 )
             bg_draw.scn.subplot_list[self.plot_target_idx+3].append_drawobj(self.eb_direction)
+            self.touch_sensors = []
+            for i in range(4):
+                local_touch_sensors = dt2.drawobj_arc(ax4, 0.0, 0.0, 0.99, np.pi/4.0+(np.pi/2.0*i), np.pi*3.0/4.0+(np.pi/2.0*i), attr='c-')
+                self.touch_sensors.append(local_touch_sensors)
+                bg_draw.scn.subplot_list[self.plot_target_idx+3].append_drawobj(local_touch_sensors)
 
             ax6 = bg_draw.scn.subplot_list[self.plot_target_idx+4].ax
             self.twn_wh_v_left = dt2.drawobj_poly(ax6, attr='r-')
@@ -168,6 +173,8 @@ class my_car_obj(bg_obj.circle_object):
                     self.eb_direction.clear()
                     self.eb_direction.append( 0.0, 0.0 )
                     self.eb_direction.append( 0.0, 0.0 )
+                    for ts in self.touch_sensors:
+                        ts.set_color('c')
                     self.cum_reward.clear()
                     self.cum_reward.append( 0.0, 0.0 )
                     self.update_count = 0
@@ -187,6 +194,12 @@ class my_car_obj(bg_obj.circle_object):
                         
                         self.twn_wh_v_left.y[1] = self.attrs[0][0]
                         self.twn_wh_v_right.y[1] = self.attrs[0][1]
+
+                        for ts, ts_val, i in zip(self.touch_sensors, self.attrs[0][4:8], [0,1,2,3]):
+                            if ts_val == 1.0:
+                                ts.set_color('r')
+                            else:
+                                ts.set_color('c')
 
                         self.update_count += 1
                         self.cum_reward.append( self.update_count, self.attrs[3] )
@@ -273,7 +286,7 @@ class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
         self.scn.subplot_list[0].ax.grid()
 
         self.scn.subplot_list[1].ax.set_xlim(-180, 180)
-        self.scn.subplot_list[1].ax.set_ylim(0, 1)
+        self.scn.subplot_list[1].ax.set_ylim(-1.0, 1.0)
         self.scn.subplot_list[1].ax.set_xlabel('x')
         self.scn.subplot_list[1].ax.set_ylabel('y')
 
@@ -297,6 +310,9 @@ class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
         self.scn.subplot_list[5].ax.set_ylim(-150, 150)
         self.scn.subplot_list[5].ax.set_xlabel('action index')
         self.scn.subplot_list[5].ax.set_ylabel('Q value')
+
+        self.scn.fig.tight_layout()
+
 
 
 class training_base:
@@ -438,7 +454,7 @@ class TWN_BoxGardenEnv(gym.Env):
         self.action_space_type = discrate_action    # True = 離散タイプ
         if self.action_space_type:
             self.logger.info("action Discrete")
-            self.action_space_divide = 4
+            self.action_space_divide = 2
             self.action_space_divide_plus1 = self.action_space_divide + 1
             self.action_space = spaces.Discrete(self.action_space_divide_plus1 * self.action_space_divide_plus1)
             if twn_operation_type == 0:
@@ -459,9 +475,9 @@ class TWN_BoxGardenEnv(gym.Env):
         
         # TWNの状態
         rot_speed_minmax = self.twn.GetRotateSpeedMinMax()
-        low1 = np.array([twn.TwoWheelMover.min_wheel_vec, twn.TwoWheelMover.min_wheel_acc, rot_speed_minmax[0], 0])
-        high1 = np.array([twn.TwoWheelMover.max_wheel_vec, twn.TwoWheelMover.max_wheel_acc, rot_speed_minmax[1], twn.TwoWheelMover.max_enagy])
-        self.noise_param_twn_state_mean = [0.0, 0.0, 0.0, 0.0]
+        low1  = np.array([twn.TwoWheelMover.min_wheel_vec, twn.TwoWheelMover.min_wheel_vec, rot_speed_minmax[0], 0.0,                         0.0, 0.0, 0.0, 0.0])
+        high1 = np.array([twn.TwoWheelMover.max_wheel_vec, twn.TwoWheelMover.max_wheel_vec, rot_speed_minmax[1], twn.TwoWheelMover.max_enagy, 1.0, 1.0, 1.0, 1.0])
+#        self.noise_param_twn_state_mean = [0.0, 0.0, 0.0, 0.0]
         self.noise_param_twn_state_var  = (high1 - low1) * 0.003
 
         # 視線センサーの状態
@@ -469,16 +485,16 @@ class TWN_BoxGardenEnv(gym.Env):
 
         # 餌のある方角と距離に相当する情報
         low3 = np.array([-1.0, -1.0, 0.0])
-        high3 = np.array([1.0, 1.0, 1.0])
+        high3 = np.array([1.0,  1.0, 1.0])
 
         # 観測データの最大、最小情報の結合
-        unit_low = [low1, low2, low3]
+        self.unit_low = [low1, low2, low3]
         list_low =[]
-        unit_high = [high1, high2, high3]
+        self.unit_high = [high1, high2, high3]
         list_high = []
         for i in range(self.obs_hist_num):
-            list_low.extend(unit_low)
-            list_high.extend(unit_high)
+            list_low.extend(self.unit_low)
+            list_high.extend(self.unit_high)
         low  = np.hstack(list_low)
         high = np.hstack(list_high)
         self.observation_space = spaces.Box(low, high)
@@ -507,23 +523,30 @@ class TWN_BoxGardenEnv(gym.Env):
 
     def collision_my_car(self):
         ans = None
+        ans2 = [False, False, False, False]
 
-        if self.collision_circle2wall(self.twn.pos, self.my_car.radius, self.wall_obj.pos, self.wall_obj.radius):
+        for cy in self.cylinders:
+            c, t, ob3_th = self.collision_circle2circle(self.twn.pos, self.my_car.radius, cy.pos, cy.radius, my_car_direction=True)
+            if c:
+                ans = 'cylinder'
+                ans2[t] = True
+
+        c, t, ob3_th = self.collision_circle2wall(self.twn.pos, self.my_car.radius, self.wall_obj.pos, self.wall_obj.radius, my_car_direction=True)
+        if c:
             ans = 'wall'
-        elif self.collision_circle2circle(self.twn.pos, self.my_car.radius, self.eb.pos, self.eb.radius):
-            ob3_angle = math.atan2(self.ob3[1], self.ob3[0])
+            ans2[t] = True
+
+        c, t, ob3_angle = self.collision_circle2circle(self.twn.pos, self.my_car.radius, self.eb.pos, self.eb.radius, my_car_direction=True)
+        if c:
+            # ob3_angle = math.atan2(self.ob3[1], self.ob3[0])
             # ob3_angle = math.atan2( -self.ob3[0], self.ob3[1] )
             if (-math.pi/180*10 < ob3_angle) & (ob3_angle < math.pi/180*10):
                 ans = 'eb_IN'  # 正面からの場合は、OK
             else:
                 ans = 'eb'  # 後ろからEBにぶつかったら、衝突とする。
-        else:
-            for cy in self.cylinders:
-                if self.collision_circle2circle(self.twn.pos, self.my_car.radius, cy.pos, cy.radius):
-                    ans = 'cylinder'
-#                    ans = True
+                ans2[t] = True
 
-        return ans
+        return ans, ans2
     
     def collision_eb(self, new_pos):
         ans = False
@@ -556,10 +579,11 @@ class TWN_BoxGardenEnv(gym.Env):
         # 状態の更新
         eb_in_flag = False
         collision_count = 0
+        col_touch = [0.0, 0.0, 0.0, 0.0]
         for i in range(self.num_delta_t_per_action):
             old_pos = copy.copy(self.twn.pos)
             self.twn.MoveNext()
-            col = self.collision_my_car()
+            col, tmp_col_touch = self.collision_my_car()
             if col is not None:
                 if col == 'eb_IN':
                     if eb_in_flag:
@@ -569,17 +593,23 @@ class TWN_BoxGardenEnv(gym.Env):
                 else:
                     self.twn.pos = old_pos
                     collision_count += 1
-        
-        return collision_count, eb_in_flag
+            for i in range(4):
+                if tmp_col_touch[i]:
+                    col_touch[i] = 1.0
+
+        return collision_count, eb_in_flag, col_touch
     
-    def gather_observation(self):
+    def gather_observation(self, col_touch=[0.0, 0.0, 0.0, 0.0]):
         # 自身の情報を集める
         rot_speed = self.twn.GetRotateSpeed()
-        self.ob1 = np.array([self.twn.wheel_vec[0], self.twn.wheel_vec[1], rot_speed, self.twn.enagy], dtype=np.float32)
-        ob1_noise_list = []
-        for m, v in zip(self.noise_param_twn_state_mean, self.noise_param_twn_state_var):
-            ob1_noise_list.append(random.gauss(m,v))
-        self.ob1 += np.array(ob1_noise_list, dtype=np.float32)
+        self.ob1 = np.array(
+            [
+                random.gauss(self.twn.wheel_vec[0], self.noise_param_twn_state_var[0]),
+                random.gauss(self.twn.wheel_vec[1], self.noise_param_twn_state_var[1]),
+                random.gauss(rot_speed,             self.noise_param_twn_state_var[2]),
+                random.gauss(self.twn.enagy,        self.noise_param_twn_state_var[3]),
+                col_touch[0], col_touch[1], col_touch[2], col_touch[3]
+                ], dtype=np.float32)
 
         # 視線交差確認で距離を求め、ob2の更新
         self.ob2 = np.empty(my_car_obj.num_of_ray, dtype=np.float32)
@@ -601,8 +631,9 @@ class TWN_BoxGardenEnv(gym.Env):
         ob3_a = self.eb.pos - self.twn.pos
         ob3_b = np.linalg.norm(ob3_a)
         ob3_c = ob3_a / ob3_b
-        ob3_c = my_car_obj.get_rot_mat( - self.twn.GetRotTheata() + random.gauss(0.0,0.2/180.0*math.pi) ).dot(ob3_c)
-        ob3_d = 1.0/(1.0+ob3_b-self.my_car.radius) + random.gauss(0.0,0.003)
+        ob3_c = my_car_obj.get_rot_mat( random.gauss( - self.twn.GetRotTheata(), 0.2/180.0*math.pi ) ).dot(ob3_c)
+        ob3_d = random.gauss( 1.0/(1.0+ob3_b-self.my_car.radius), 0.003 )
+
         self.ob3 = np.array([ob3_c[0], ob3_c[1], ob3_d], dtype=np.float32)
 
         # 観測情報を構築する
@@ -736,10 +767,10 @@ class TWN_BoxGardenEnv(gym.Env):
         self.old_ob2 = self.ob2
         self.old_ob3 = self.ob3
         
-        collision_count, eb_in_flag = self.step_next_state(action)
+        collision_count, eb_in_flag, col_touch = self.step_next_state(action)
         
         # 観測情報を集める
-        ob_return = self.gather_observation()
+        ob_return = self.gather_observation(col_touch)
         
         # 報酬情報の収集
         reward_map = self.step_calc_reward(collision_count, eb_in_flag)
@@ -821,19 +852,75 @@ class TWN_BoxGardenEnv(gym.Env):
     def finish(self):
         self.bg_draw_boot.finish()
         
-    def collision_circle2circle(self, c1, r1, c2, r2):
-        ans = False
-        dif_len = np.linalg.norm(c1 - c2)
-        if dif_len < (r1 + r2 + 0.2):
-            ans = True
-        return ans
+    def collision_circle2circle(self, c1, r1, c2, r2, my_car_direction=None):
+        if my_car_direction is None:
+            ans = False
+            dif_len = np.linalg.norm(c1 - c2)
+            if dif_len < (r1 + r2 + 0.2):
+                ans = True
+            return ans
+        else:
+            ans = False
+            ans2 = -1
+            ob3_th = 0.0
+
+            ob3_a = c2 - c1                     # 円形の障害物までの方向ベクトル
+            dif_len = np.linalg.norm(ob3_a)     # 円形の障害物までの距離
+
+            if dif_len < (r1 + r2 + 0.2):
+                ans = True
+
+                ob3_c = ob3_a / dif_len         # 円形の障害物までの方向ベクトルの単位ベクトル
+                ob3_c = my_car_obj.get_rot_mat( - self.twn.GetRotTheata() ).dot(ob3_c)
+                ob3_th = math.atan2(ob3_c[1], ob3_c[0])
+
+                if abs(ob3_th) < (math.pi/4.0):
+                    ans2 = 0
+                elif abs(ob3_th) > (math.pi * 3.0/4.0):
+                    ans2 = 2
+                else:
+                    if ob3_th > 0.0:
+                        ans2 = 1
+                    else:
+                        ans2 = 3
+
+            return ans, ans2, ob3_th
+
     
-    def collision_circle2wall(self, c1, r1, w2, r2):
-        ans = False
-        dif_len = np.linalg.norm(c1 - w2)
-        if r2 < (dif_len + r1 + 0.2):
-            ans = True
-        return ans
+    def collision_circle2wall(self, c1, r1, w2, r2, my_car_direction=None):
+        if my_car_direction is None:
+            ans = False
+            dif_len = np.linalg.norm(c1 - w2)
+            if r2 < (dif_len + r1 + 0.2):
+                ans = True
+            return ans
+
+        else:
+            ans = False
+            ans2 = -1
+            ob3_th = 0.0
+
+            ob3_a = c1 - w2                     # 円形外壁までの方向ベクトル
+            dif_len = np.linalg.norm(ob3_a)     # 円形外壁までの距離
+
+            if r2 < (dif_len + r1 + 0.2):
+                ans = True
+
+                ob3_c = ob3_a / dif_len         # 円形外壁までの方向ベクトルの単位ベクトル
+                ob3_c = my_car_obj.get_rot_mat( - self.twn.GetRotTheata() ).dot(ob3_c)
+                ob3_th = math.atan2(ob3_c[1], ob3_c[0])
+
+                if abs(ob3_th) < (math.pi/4.0):
+                    ans2 = 0
+                elif abs(ob3_th) > (math.pi * 3.0/4.0):
+                    ans2 = 2
+                else:
+                    if ob3_th > 0.0:
+                        ans2 = 1
+                    else:
+                        ans2 = 3
+
+            return ans, ans2, ob3_th
 
 
     def reset_eb_pos(self):
@@ -951,6 +1038,54 @@ class TWN_BoxGardenEnv6(TWN_BoxGardenEnv):
     def __init__(self, discrate_action=True):
         super().__init__(discrate_action, history_size=1, renderable=True, twn_operation_type=1)
         print('TWN_BoxGardenEnv6: history size {}  renderable=True'.format(self.obs_hist_num))
+
+class TWN_BoxGardenEnv7(TWN_BoxGardenEnv):
+    '''
+    TWN_BoxGardenEnv1の観測値が正規化されるモデル
+    '''
+    def __init__(self, discrate_action=True, twn_operation_type=0):
+        super().__init__(discrate_action, history_size=1, renderable=True, twn_operation_type=twn_operation_type)
+        print('TWN_BoxGardenEnv7: history size {}  renderable=True'.format(self.obs_hist_num))
+
+        self.orig_observation_space = self.observation_space
+
+        new_unit_low = []
+        new_unit_high = []
+        for l, h in zip(self.unit_low, self.unit_high):
+            for ll, hh in zip(l, h):
+                new_unit_low.append(-1.0)
+                new_unit_high.append(1.0)
+
+        list_low =[]
+        list_high = []
+        for i in range(self.obs_hist_num):
+            list_low.extend(new_unit_low)
+            list_high.extend(new_unit_high)
+        low  = np.hstack(list_low)
+        high = np.hstack(list_high)
+
+        self.observation_space = spaces.Box(low, high)
+
+    def obs_normalize(self, r_obs):
+        tmp_obs = (r_obs - self.orig_observation_space.low) / (self.orig_observation_space.high - self.orig_observation_space.low)
+        rr_obs = (tmp_obs * (self.observation_space.high - self.observation_space.low)) + self.observation_space.low
+        return rr_obs
+
+    def step(self, action):
+        r_obs, reward, done, info = super().step(action)
+        return self.obs_normalize(r_obs), reward, done, info
+
+    def reset(self):
+        r_obs = super().reset()
+        return self.obs_normalize(r_obs)
+
+class TWN_BoxGardenEnv8(TWN_BoxGardenEnv7):
+    '''
+    TWN_BoxGardenEnv7のWheelの加速度制御型
+    '''
+    def __init__(self, discrate_action=True):
+        super().__init__(discrate_action, twn_operation_type=1)
+        print('TWN_BoxGardenEnv8: history size {}  renderable=True'.format(self.obs_hist_num))
 
         
 if __name__ == '__main__':
