@@ -727,14 +727,14 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
         return ans
 
 
-def func_agent_generation(args, env, load_flag=False, explor_rate=None):
+def func_agent_generation(args, env, load_flag=False, explor_rate=None, load_name=None):
     
     agent = MMAgent_DDQN(args, env, load_flag, explor_rate)
 
     #if len(args.load) > 0:
     if load_flag:
         #agent.load(args.load)
-        agent.load('agent')
+        agent.load('agent_{}'.format(load_name))
         #logger.debug('load: {}'.format(args.load) )
         print('load: {}'.format('agent') )
 
