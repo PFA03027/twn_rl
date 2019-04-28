@@ -322,8 +322,11 @@ class training_base:
     
     def set_end_status(self, success_fail):
         ''' If success_fail is True, success_count is increased. '''
+        self.try_count += 1
         if success_fail:
             self.success_count += 1
+        
+        print('try: {} - success {}'.format(self.try_count,self.success_count))
     
     def get_success_rate(self):
         if self.try_count == 0:
@@ -342,7 +345,6 @@ class training_type1(training_base):
         self.set_end_status(status_get_eb_flag)
 
     def get_new_eb_pos(self):
-        self.try_count += 1
         dist = 1.5 + self.try_count % (self.success_count%12+1)
         if dist > TWN_BoxGardenEnv.wall_area_range * 0.8:
             dist = TWN_BoxGardenEnv.wall_area_range * 0.8
@@ -353,7 +355,6 @@ class training_type2(training_base):
         self.set_end_status(status_get_eb_flag)
 
     def get_new_eb_pos(self):
-        self.try_count += 1
         dist = 3.0 + self.try_count % (self.success_count%10+1)
         if dist > TWN_BoxGardenEnv.wall_area_range * 0.8:
             dist = TWN_BoxGardenEnv.wall_area_range * 0.8
@@ -364,7 +365,6 @@ class training_type3(training_base):
         self.set_end_status(status_get_eb_flag)
 
     def get_new_eb_pos(self):
-        self.try_count += 1
         dist = 3.0 + self.try_count % (self.success_count%10+1)
         if dist > TWN_BoxGardenEnv.wall_area_range * 0.8:
             dist = TWN_BoxGardenEnv.wall_area_range * 0.8
@@ -378,7 +378,6 @@ class training_type4(training_base):
         self.set_end_status(status_get_eb_flag)
 
     def get_new_eb_pos(self):
-        self.try_count += 1
         dist = 3.0 + self.try_count % (self.success_count%12+1)
         if dist > TWN_BoxGardenEnv.wall_area_range:
             dist = TWN_BoxGardenEnv.wall_area_range
@@ -389,7 +388,6 @@ class training_type5(training_base):
         self.set_end_status(status_get_eb_flag)
 
     def get_new_eb_pos(self):
-        self.try_count += 1
         ans = np.random.uniform(-1.0, 1.0, 2).reshape(2,1)
         if self.try_count%4 == 0:
             ans += np.array([ 9.0,  9.0]).reshape(2,1)
@@ -807,7 +805,6 @@ class TWN_BoxGardenEnv(gym.Env):
         
         if done:
             self.current_trainer.check_end_status(ob_return, reward_map, eb_in_flag)
-            self.trainers = [training_type1(), training_type2(), training_type3(), training_type4(), training_type5()]
             for tr in self.trainers:
                 self.logger.critical('tr: {}  success rate: {}'.format(tr.__class__.__name__, tr.get_success_rate()))
 
@@ -839,7 +836,7 @@ class TWN_BoxGardenEnv(gym.Env):
             self.obs_hist.append(np.hstack(ob_return))
         
         r_obs = np.hstack(self.obs_hist)
- 
+
         return r_obs
 
     def reset_render(self, mode='human', close=False):
