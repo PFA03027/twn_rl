@@ -324,6 +324,12 @@ class training_base:
         ''' If success_fail is True, success_count is increased. '''
         if success_fail:
             self.success_count += 1
+    
+    def get_success_rate(self):
+        if self.try_count == 0:
+            return 0.0
+        else:
+            return self.success_count/self.try_count
 
     def check_end_status(self, obs, reward_map, status_get_eb_flag):
         raise NotImplementedError()
@@ -762,6 +768,7 @@ class TWN_BoxGardenEnv(gym.Env):
     #def _step(self, action):
     def step(self, action):
         done = False
+        success_flag = False
         pre_enagy = copy.copy(self.twn.enagy)
         self.old_ob1 = self.ob1
         self.old_ob2 = self.ob2
@@ -779,6 +786,7 @@ class TWN_BoxGardenEnv(gym.Env):
         # 終了判定
         if eb_in_flag:  # ご飯にありつけた
             done = True         # エピソードを終了する
+            success_flag = True
             self.get_eb_count += 1
             self.logger.critical("Get EB!!!")
 
@@ -799,10 +807,13 @@ class TWN_BoxGardenEnv(gym.Env):
         
         if done:
             self.current_trainer.check_end_status(ob_return, reward_map, eb_in_flag)
+            self.trainers = [training_type1(), training_type2(), training_type3(), training_type4(), training_type5()]
+            for tr in self.trainers:
+                self.logger.critical('tr: {}  success rate: {}'.format(tr.__class__.__name__, tr.get_success_rate()))
 
         self.cumulative_value_of_reward = reward + self.cumulative_value_of_reward * 0.99
 #        self.cumulative_value_of_reward += reward
-        return r_obs, reward, done, {'reward_map': reward_map, 'cumulative_reward': self.cumulative_value_of_reward }
+        return r_obs, reward, done, {'reward_map': reward_map, 'cumulative_reward': self.cumulative_value_of_reward, 'success_flag': success_flag }
     
     #def _reset(self):
     def reset(self):
@@ -926,16 +937,16 @@ class TWN_BoxGardenEnv(gym.Env):
     def reset_eb_pos(self):
         self.try_count += 1
         self.logger.info('EB count: {}'.format(self.get_eb_count))
-        if self.get_eb_count < 100:
+        if self.get_eb_count < 50:
             self.training_step = 0
             self.current_trainer = self.trainers[0]
-        elif self.get_eb_count < 200:
+        elif self.get_eb_count < 100:
             self.training_step = 1
             self.current_trainer = self.trainers[self.try_count % 2]
-        elif self.get_eb_count < 300:
+        elif self.get_eb_count < 150:
             self.training_step = 2
             self.current_trainer = self.trainers[self.try_count % 3]
-        elif self.get_eb_count < 400:
+        elif self.get_eb_count < 200:
             self.training_step = 3
             self.current_trainer = self.trainers[self.try_count % 4]
         else:
@@ -950,6 +961,9 @@ class TWN_BoxGardenEnv(gym.Env):
                 break
         if self.twn_bg_draw is not None:
             self.eb.update_pos_attrs(new_pos, self.eb.radius)
+    
+    def get_current_trainer(self):
+        return self.current_trainer
 
 class TWN_BoxGardenEnv1(TWN_BoxGardenEnv):
     '''

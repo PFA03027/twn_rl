@@ -161,6 +161,8 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
         R = 0
         final_step = 0
         for t in range(max_number_of_steps):  #1試行のループ
+            if isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
+                agent.set_success_rate(env.get_current_trainer().get_success_rate())
             action = agent.act_and_train(observation, reward)
             reward = 0
             observation, reward, done, info = env.step(action)
@@ -183,7 +185,10 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
                 env.render(add_info=tmp_add_info)
                 stat = agent.get_statistics()
 #                logger.info('episode: {}  turn: {} EB: {} R: {}  statistics [(average_q: {}), (average_loss: {})]  TWN enagy: {}'.format(episode, t, env.get_eb_count, R, stat[0][1], stat[1][1], env.twn.enagy))
-                logger.info('episode: {}  turn: {} EB: {} R: {}  statistics [{}]  TWN enagy: {}'.format(episode, t, env.get_eb_count, R, stat, env.twn.enagy))
+                if isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
+                    logger.info('episode: {}  turn: {} EB: {} R: {}  statistics [{}]  TWN enagy: {}  success rate: {}, explorer rate: {}'.format(episode, t, env.get_eb_count, R, stat, env.twn.enagy, agent.success_rate, agent.explorer.compute_epsilon(agent.agent.t)))
+                else:
+                    logger.info('episode: {}  turn: {} EB: {} R: {}  statistics [{}]  TWN enagy: {}'.format(episode, t, env.get_eb_count, R, stat, env.twn.enagy))
 
             if done:
                 final_step = t

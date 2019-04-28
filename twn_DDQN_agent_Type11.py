@@ -389,6 +389,8 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
         self.replay_start_size = 1000
         self.minibatch_size = 512
 
+        self.success_rate = 1.0
+
         gamma = 0.99
         alpha = 0.5
         
@@ -402,13 +404,14 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
         self.q_func = Qfunc_FC_TWN_RL(self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status, env.action_space.n)
         self.q_func_opt = chainer.optimizers.Adam(eps=1e-2)
         self.q_func_opt.setup(self.q_func)
+        self.explorer = None
         if load_flag:
             if explor_rate is None:
-                explorer = chainerrl.explorers.ConstantEpsilonGreedy(epsilon=0.05, random_action_func=env.action_space.sample)
+                self.explorer = chainerrl.explorers.ConstantEpsilonGreedy(epsilon=0.05, random_action_func=env.action_space.sample)
             else:
-                explorer = SuccessRateEpsilonGreedy.SuccessRateEpsilonGreedy(start_epsilon=explor_rate, end_epsilon=0.05, decay_steps=500000, random_action_func=env.action_space.sample)
+                self.explorer = SuccessRateEpsilonGreedy.SuccessRateEpsilonGreedy(start_epsilon=explor_rate, end_epsilon=0.05, decay_steps=500000, random_action_func=env.action_space.sample)
         else:
-            explorer = SuccessRateEpsilonGreedy.SuccessRateEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.05, decay_steps=500000, random_action_func=env.action_space.sample)
+            self.explorer = SuccessRateEpsilonGreedy.SuccessRateEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.05, decay_steps=500000, random_action_func=env.action_space.sample)
     
         #replay_buffer = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedReplayBuffer(capacity=10 ** 6)
@@ -417,7 +420,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
     
         phi = lambda x: x.astype(np.float32, copy=False)
         self.agent = chainerrl.agents.DoubleDQN(
-            self.q_func, self.q_func_opt, replay_buffer_q_func, gamma, explorer,
+            self.q_func, self.q_func_opt, replay_buffer_q_func, gamma, self.explorer,
             average_q_decay=0.01, average_loss_decay=0.01,
             update_interval=self.update_interval,
             target_update_interval=self.target_update_interval,
@@ -429,7 +432,10 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
         
         self.t = 0
         self.last_losses = None
-    
+
+    def set_success_rate(self, rate):
+        self.success_rate = rate
+
     def obs_split_twn(self, obs):
         state32 = obs.astype(np.float32)
 
@@ -471,6 +477,8 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
                 x_ray_out_np = x_ray_out.data.reshape(-1)
         
                 h3_c = np.hstack([twn_status, x_ray_out_np, eb_status])
+
+        self.explorer.set_success_rate(self.success_rate)
         
         action = self.agent.act_and_train(h3_c, reward)
         
