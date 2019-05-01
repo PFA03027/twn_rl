@@ -85,30 +85,37 @@ def training_log_graph(mq, window_title):
     scn.subplot_list[2].append_drawobj(final_reward_graph_line)
     
     scn.subplot_list[3].ax.set_xlim(0, max_episode)
-    scn.subplot_list[3].ax.set_ylim(-0.5, 1.5)
+    scn.subplot_list[3].ax.set_ylim(0.0, 1.0)
     scn.subplot_list[3].ax.set_xlabel('epsode count')
-    scn.subplot_list[3].ax.set_ylabel('tarmination flag')
+    scn.subplot_list[3].ax.set_ylabel('success rate')
     scn.subplot_list[3].ax.grid()
     
-    termination_flag_graph_ax = scn.subplot_list[3].ax
-    termination_flag_graph_line = dt2.drawobj_poly(termination_flag_graph_ax, attr='b-')
-    scn.subplot_list[3].append_drawobj(termination_flag_graph_line)
+    success_rate_graph_ax = scn.subplot_list[3].ax
+    success_rate_graph_lines = None
 
     scn.fig.tight_layout()
 
 
     def func(data, mq):
         try:
-            # msg: (epsode count, EB count, final step count, final reward, termination flag)
+            # msg: (epsode count, EB count, final step count, final reward, success rate list)
+            nonlocal EB_count_graph_line
+            nonlocal final_step_count_graph_line
+            nonlocal final_reward_graph_line
+            nonlocal success_rate_graph_ax
+            nonlocal success_rate_graph_lines
+
             msg = mq.get(block=False)
             EB_count_graph_line.append( msg[0], msg[1])
             final_step_count_graph_line.append( msg[0], msg[2])
             final_reward_graph_line.append( msg[0], msg[3])
-            if msg[4]:
-                a = 1.0
-            else:
-                a = 0.0
-            termination_flag_graph_line.append( msg[0], a)
+
+            if success_rate_graph_lines is None:
+                success_rate_graph_lines = {dt2.drawobj_poly(success_rate_graph_ax) for sr in msg[4]}
+                for l in success_rate_graph_lines:
+                    scn.subplot_list[3].append_drawobj(l)
+            for l, sr in zip(success_rate_graph_lines, msg[4]):
+                l.append(msg[0], sr)
 
             scn.update_subplot()
 
@@ -137,7 +144,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
 
     env = gym.make(env_name)
     
-    max_number_of_steps = 3000  #総試行回数
+    max_number_of_steps = 100  #総試行回数
     num_episodes = 500  #総試行回数
     episode = 0
     explor_rate = None
@@ -223,7 +230,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
         if mq_training_result_graph is not None:
             msg = (episode, env.get_eb_count, final_step, R, done)
             logger.info('msg: {}'.format(msg))
-            mq_training_result_graph.put_nowait((episode, env.get_eb_count, final_step, R, done))
+            mq_training_result_graph.put_nowait((episode, env.get_eb_count, final_step, R, tuple(tn.get_success_rate() for tn in env.trainers)))
 
     logger.info('Finish training.')
 
@@ -402,7 +409,7 @@ if __name__ == '__main__':
 
         demo_process = mp.Process(target=func_demo, args=(args, mq_to_demo, env_name, func_agent_generation))
         demo_process.start()
-        mq_training_result_process = mp.Process(target=training_log_graph, args=(mq_training_result_graph, 'env: {}  agent: {}'.format(env_name, func_agent_generation.__class__.__name__)))
+        mq_training_result_process = mp.Process(target=training_log_graph, args=(mq_training_result_graph, 'env-{}_agent-{}'.format(env_name, func_agent_generation.__class__.__name__)))
         mq_training_result_process.start()
 
         func_traning(args, mq_to_demo, env_name, func_agent_generation, mq_training_result_graph)
@@ -412,7 +419,7 @@ if __name__ == '__main__':
         demo_process.join()
     else:
         mq_training_result_graph = mp.Queue()
-        mq_training_result_process = mp.Process(target=training_log_graph, args=(mq_training_result_graph, 'env: {}  agent: {}'.format(env_name, func_agent_generation.__module__)))
+        mq_training_result_process = mp.Process(target=training_log_graph, args=(mq_training_result_graph, 'env-{}_agent-{}'.format(env_name, func_agent_generation.__module__)))
         mq_training_result_process.start()
 
         func_traning(args, None, env_name, func_agent_generation, mq_training_result_graph)

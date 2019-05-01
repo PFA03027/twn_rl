@@ -253,10 +253,13 @@ class drawobj_poly(drawobj_base):
     '''
         複数点間を結ぶポリゴン描画オブジェクト
     '''
-    def __init__( self, ax, attr='g--', parent=None ):
+    def __init__( self, ax, attr=None, parent=None ):
         self.x = []
         self.y = []
-        self.poly, = ax.plot(self.x, self.y, attr)
+        if attr is None:
+            self.poly, = ax.plot(self.x, self.y)
+        else:
+            self.poly, = ax.plot(self.x, self.y, attr)
         super().__init__(parent=parent, plot_obj=self.poly)
         
     def append(self, x, y):
