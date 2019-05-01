@@ -144,7 +144,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
 
     env = gym.make(env_name)
     
-    max_number_of_steps = 100  #総試行回数
+    max_number_of_steps = 3000  #総試行回数
     num_episodes = 500  #総試行回数
     episode = 0
     explor_rate = None
