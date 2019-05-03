@@ -328,7 +328,9 @@ class training_base:
         
         print('try: {} - success {}'.format(self.try_count,self.success_count))
     
-    def get_success_rate(self):
+    @property
+    def success_rate(self):
+        """現在の成功率を返す。読み取り専用とするため、setterは定義しない"""
         if self.try_count == 0:
             return 0.0
         else:

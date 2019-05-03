@@ -29,12 +29,12 @@ import chainerrl.q_functions as Qfunc
 #from chainerrl.action_value import DiscreteActionValue
 
 import success_buffer_replay
-
+import twn_model_base
 
 def nl(x):
     return F.dropout(F.leaky_relu(x))
 
-class Qfunc_FC_TWN(Qfunc.SingleModelStateQFunctionWithDiscreteAction):
+class Qfunc_FC_TWN(Qfunc.SingleModelStateQFunctionWithDiscreteAction, twn_model_base.TWNAgentMixin):
     """Fully-connected state-input Q-function with discrete actions.
 
     Args:
