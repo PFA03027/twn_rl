@@ -260,14 +260,28 @@ def func_demo(args, mq, env_name, func_agent_generation):
                     elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type2_2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type8.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type9.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type10.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
                         av_data = agent.agent.q_function.model.debug_info[0].data
                     env.render(add_info=[av_data.reshape(1,-1)])
-                    stat = agent.get_statistics()
-                    logger.info('episode: {}  turn: {} EB: {} R: {}  statistics [{}]  TWN enagy: {}'.format(episode, t, env.get_eb_count, R, stat, env.twn.enagy))
-    
+                    logger.info('episode:{:>3} turn:{:>4} EB:{:>3} R:{: >7.1f}  Enagy:{: 4.1f} success rate:{:>4.0%} {:>3}/{:>3}, statistics[{}]'.format(
+                        episode,
+                        t, 
+                        env.get_eb_count, 
+                        R, 
+                        env.twn.enagy, 
+                        env.get_current_trainer().success_rate, 
+                        env.get_current_trainer().success_count, 
+                        env.get_current_trainer().try_count, 
+                        agent.get_statistics_formated_string()
+                        ))
+
                 if done:
                     break
             agent.stop_episode()
             stat = agent.get_statistics()
-            logger.info('episode: {}  R: {}  statistics [(average_q: {}), (average_loss: {})]'.format(episode, R, stat[0][1], stat[1][1]))
+            logger.info('episode:{:>3} R:{: >7.1f}  Enagy:{: 4.1f}, statistics[{}]'.format(
+                episode,
+                R, 
+                env.twn.enagy, 
+                agent.get_statistics_formated_string()
+                ))
         logger.info('Finish evaluation.')
 
     else:
@@ -300,14 +314,28 @@ def func_demo(args, mq, env_name, func_agent_generation):
                                 elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type2_2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type8.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type9.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type10.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
                                     av_data = agent.agent.q_function.model.debug_info[0].data
                                 env.render(add_info=[av_data.reshape(1,-1)])
-                                stat = agent.get_statistics()
-                                logger.info('episode: {}  turn: {}  R: {}  statistics [(average_q: {}), (average_loss: {})]  TWN enagy: {}'.format(episode, t, R, stat[0][1], stat[1][1], env.twn.enagy))
+                                logger.info('episode:{:>3} turn:{:>4} EB:{:>3} R:{: >7.1f}  Enagy:{: 4.1f} success rate:{:>4.0%} {:>3}/{:>3}, statistics[{}]'.format(
+                                    episode,
+                                    t, 
+                                    env.get_eb_count, 
+                                    R, 
+                                    env.twn.enagy, 
+                                    env.get_current_trainer().success_rate, 
+                                    env.get_current_trainer().success_count, 
+                                    env.get_current_trainer().try_count, 
+                                    agent.get_statistics_formated_string()
+                                    ))
                 
                             if done:
                                 break
                         agent.stop_episode()
                         stat = agent.get_statistics()
-                        logger.info('episode: {}  R: {}  statistics [(average_q: {}), (average_loss: {})]'.format(episode, R, stat[0][1], stat[1][1]))
+                        logger.info('episode:{:>3} R:{: >7.1f}  Enagy:{: 4.1f}, statistics[{}]'.format(
+                            episode,
+                            R, 
+                            env.twn.enagy, 
+                            agent.get_statistics_formated_string()
+                            ))
                     logger.info('Finish evaluation.')
                     print('Finish evaluation.')
             elif msg == Evaluation_Cmd.FINISH:
