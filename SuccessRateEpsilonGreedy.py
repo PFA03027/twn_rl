@@ -27,10 +27,7 @@ class SuccessRateEpsilonGreedy(explorers.LinearDecayEpsilonGreedy):
         self.exp_rate = self.sr_epsilon_gain
 
     def compute_epsilon(self, t):
-        ret_value = self.end_epsilon
-        if t <= self.decay_steps:
-            epsilon_diff = self.end_epsilon - self.start_epsilon
-            ret_value = self.start_epsilon + epsilon_diff * (t / self.decay_steps)
+        ret_value = super().compute_epsilon(t)
         
         if ret_value < self.exp_rate:
             ret_value = self.exp_rate
@@ -41,4 +38,4 @@ class SuccessRateEpsilonGreedy(explorers.LinearDecayEpsilonGreedy):
         self.exp_rate = (1.0 - r) * self.sr_epsilon_gain
 
     def __repr__(self):
-        return 'SuccessRateEpsilonGreedy(epsilon={},success rate={})'.format(self.epsilon, self.success_rate)
+        return 'SuccessRateEpsilonGreedy(epsilon={},explorer rate={})'.format(self.epsilon, self.exp_rate)

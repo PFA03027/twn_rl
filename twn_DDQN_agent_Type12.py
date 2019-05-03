@@ -34,7 +34,9 @@ from chainerrl.action_value import DiscreteActionValue
 from chainerrl.agents import dqn
 
 import success_buffer_replay
+import SuccessRateEpsilonGreedy
 import twn_model_base
+
 
 class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
     """行動価値関数 = Q関数
@@ -114,7 +116,13 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
     
             self.num_of_conv_out_elements, self.num_of_pooling_out_elements = self.calc_num_out_elements1D(self.num_in_elements, self.in_channel, self.out_channel, self.filter_size, self.slide_size, self.pooling_size)
 
-            print('Layer {}: in: {}  out: conv out {}  pooling out {}'.format(name, self.num_in_elements, self.num_of_conv_out_elements, self.num_of_pooling_out_elements))
+            print('Layer {}: in: {} drop rate: {:>4.1%} out: conv out {}  pooling out {}'.format(
+                name,
+                self.num_in_elements,
+                self.dropout_rate,
+                self.num_of_conv_out_elements,
+                self.num_of_pooling_out_elements
+                ))
 
             super().__init__()
             with self.init_scope():
@@ -170,6 +178,8 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
             with self.init_scope():
                 self.l_in = L.Linear(self.num_in_elements*self.num_in_channel, self.n_clasfy_ray) #クラス分類用
                 self.l_out = L.Linear(self.n_clasfy_ray, self.num_in_elements*self.num_in_channel) #クラス分類用
+            
+            print('Layer {}: in: element {}  channel {}, out: {}'.format(name, self.num_in_elements, self.num_in_channel, self.n_clasfy_ray))
             
         def fwd(self, state):
             if self.dropout_rate == 0.0:
@@ -292,11 +302,13 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
         explor_rate=0.0: 探索行動比率（現時点で未使用）
     """
 
-    class Qfunc_FC_TWN_model_RLLayer(chainer.Chain):
+    class Qfunc_FC_TWN_model_RLLayer(chainer.Chain, agent.AttributeSavingMixin):
         """ 
         強化学習の対象となる層
         """
         
+        saved_attributes = ('l4','l5','action_chain_list')
+    
         def __init__(self, n_in_elements, n_actions, explor_rate=0.0):
             '''
             Q値の範囲が報酬体系によって負の値をとる場合、F.reluは負の値をとれないので、学習に適さない。
@@ -312,19 +324,13 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
 
             super().__init__()
             with self.init_scope():
-                self.ml5 = links.MLP(
-                    n_in_elements, n_actions,
-                    (
-                        n_in_elements*2,
-                        int(n_in_elements*1.8),
-                        int(n_in_elements*1.5),
-                        int(n_in_elements*1.2),
-                        n_in_elements,
-                        int(n_in_elements*0.8),
-                        (n_in_elements*2)//3,
-                        (n_in_elements//2)*n_actions
-                        ),
-                        nonlinearity=F.leaky_relu)
+                self.l4 = links.MLP(n_in_elements, int(n_in_elements*1.2), (n_in_elements*2, int(n_in_elements*1.8), int(n_in_elements*1.5)), nonlinearity=F.leaky_relu)
+                self.l5 = links.MLP(int(n_in_elements*1.2)+4, 4, (n_in_elements, int(n_in_elements*0.8), (n_in_elements*2)//3), nonlinearity=F.leaky_relu)
+                local_action_links_list = []
+                for i in range(n_actions):
+                    action_links = links.MLP(4, 1, (n_in_elements//2,), nonlinearity=F.leaky_relu)
+                    local_action_links_list.append(action_links)
+                self.action_chain_list = chainer.ChainList(*local_action_links_list)
 
             self.explor_rate = explor_rate
             
@@ -337,7 +343,25 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
                 type: Variable of Chainer
                 Q values of all actions
             '''
-            h7 = self.ml5(x)
+
+            ss = list(x.shape)
+            ss[1] = 1
+            noise0 = np.random.normal( 0.0, 0.5, ss)
+            noise1 = np.random.normal(-1.0, 0.5, ss)
+            noise2 = np.random.normal( 1.0, 0.5, ss)
+            noise3 = np.random.uniform(low=-1.0, high=1.0, size=ss)
+            
+            rdata = np.hstack([noise0, noise1, noise2, noise3]).astype(np.float32)
+
+            h4 = self.l4(x)
+            h4_c = F.concat([h4, chainer.Variable(rdata)], axis=1)
+            h5 = self.l5(h4_c)
+            action_Qvalues = []
+            for act_mlp in self.action_chain_list:
+                qout = act_mlp(h5)
+                action_Qvalues.append(qout)
+            
+            h7 = F.concat(action_Qvalues, axis=1)
             
             self.debug_info = (h7)
     
@@ -370,7 +394,9 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         self.update_interval = 10
         self.target_update_interval = 200
         self.replay_start_size = 1000
-        self.minibatch_size = 256
+        self.minibatch_size = 512
+
+        self.success_rate = 1.0
 
         gamma = 0.99
         alpha = 0.5
@@ -385,22 +411,23 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         self.q_func = Qfunc_FC_TWN_RL(self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status, env.action_space.n)
         self.q_func_opt = chainer.optimizers.Adam(eps=1e-2)
         self.q_func_opt.setup(self.q_func)
+        self.explorer = None
         if load_flag:
             if explor_rate is None:
-                explorer = chainerrl.explorers.ConstantEpsilonGreedy(epsilon=0.05, random_action_func=env.action_space.sample)
+                self.explorer = chainerrl.explorers.ConstantEpsilonGreedy(epsilon=0.05, random_action_func=env.action_space.sample)
             else:
-                explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=explor_rate, end_epsilon=0.05, decay_steps=50000, random_action_func=env.action_space.sample)
+                self.explorer = SuccessRateEpsilonGreedy.SuccessRateEpsilonGreedy(start_epsilon=explor_rate, end_epsilon=0.05, decay_steps=50000, random_action_func=env.action_space.sample)
         else:
-            explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.05, decay_steps=50000, random_action_func=env.action_space.sample)
+            self.explorer = SuccessRateEpsilonGreedy.SuccessRateEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.05, decay_steps=50000, random_action_func=env.action_space.sample)
     
         #replay_buffer = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedEpisodicReplayBuffer(capacity=10 ** 6)
-        replay_buffer_q_func = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
+        replay_buffer_q_func = success_buffer_replay.ActionFareSamplingReplayBuffer(capacity=10 ** 6)
     
         phi = lambda x: x.astype(np.float32, copy=False)
         self.agent = chainerrl.agents.DoubleDQN(
-            self.q_func, self.q_func_opt, replay_buffer_q_func, gamma, explorer,
+            self.q_func, self.q_func_opt, replay_buffer_q_func, gamma, self.explorer,
             average_q_decay=0.01, average_loss_decay=0.01,
             update_interval=self.update_interval,
             target_update_interval=self.target_update_interval,
@@ -412,7 +439,10 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         
         self.t = 0
         self.last_losses = None
-    
+
+    def set_success_rate(self, rate):
+        self.success_rate = rate
+
     def obs_split_twn(self, obs):
         state32 = obs.astype(np.float32)
 
@@ -454,6 +484,8 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
                 x_ray_out_np = x_ray_out.data.reshape(-1)
         
                 h3_c = np.hstack([twn_status, x_ray_out_np, eb_status])
+
+        self.explorer.set_success_rate(self.success_rate)
         
         action = self.agent.act_and_train(h3_c, reward)
         
@@ -563,8 +595,20 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         ans.extend(self.agent.get_statistics())
         return ans
 
+    def get_statistics_formated_string(self):
+        stat = self.get_statistics()
+        ans = '({}:{: >6.2f}), ({}: {: >5.2f}), (explorer rate({: >6}): {:>7.3%})'.format(
+            stat[0][0], 
+            stat[0][1], 
+            stat[1][0], 
+            stat[1][1], 
+            self.agent.t, 
+            self.explorer.compute_epsilon(self.agent.t)
+            )
+        return ans
 
-def func_agent_generation(args, env, load_flag=False, explor_rate=None):
+
+def func_agent_generation(args, env, load_flag=False, explor_rate=None, load_name=None):
     
     agent = MMAgent_DDQN(args, env, load_flag, explor_rate)
 

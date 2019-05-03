@@ -169,7 +169,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
         final_step = 0
         for t in range(max_number_of_steps):  #1試行のループ
             if isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
-                agent.set_success_rate(env.get_current_trainer().get_success_rate())
+                agent.set_success_rate(env.get_current_trainer().success_rate)
             action = agent.act_and_train(observation, reward)
             reward = 0
             observation, reward, done, info = env.step(action)
@@ -190,27 +190,17 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
                         tmp_add_info.extend([agent.cnn_ae.debug_info[0][3][0,:,:].reshape(-1), agent.cnn_ae.debug_info[0][2][0,:,:].reshape(-1)])
 
                 env.render(add_info=tmp_add_info)
-                stat = agent.get_statistics()
-#                logger.info('episode: {}  turn: {} EB: {} R: {}  statistics [(average_q: {}), (average_loss: {})]  TWN enagy: {}'.format(episode, t, env.get_eb_count, R, stat[0][1], stat[1][1], env.twn.enagy))
-                if isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
-                    logger.info('episode: {:>3}  turn: {:>4} EB: {:>3} R: {: >7.1f}  statistics [({}:{: >6.2f}), ({}: {: >5.2f})]  TWN enagy: {: 4.1f}  success rate: {:>4.0%} {:>3}/{:>3}, explorer rate({: >6}): {:>7.3%}'.format(
-                        episode,
-                        t, 
-                        env.get_eb_count, 
-                        R, 
-                        stat[0][0], 
-                        stat[0][1], 
-                        stat[1][0], 
-                        stat[1][1], 
-                        env.twn.enagy, 
-                        agent.success_rate, 
-                        env.get_current_trainer().success_count, 
-                        env.get_current_trainer().try_count, 
-                        agent.agent.t, 
-                        agent.explorer.compute_epsilon(agent.agent.t)
-                        ))
-                else:
-                    logger.info('episode: {}  turn: {} EB: {} R: {: .1f}  statistics [{}]  TWN enagy: {: .1f}'.format(episode, t, env.get_eb_count, R, stat, env.twn.enagy))
+                logger.info('episode:{:>3} turn:{:>4} EB:{:>3} R:{: >7.1f}  Enagy:{: 4.1f} success rate:{:>4.0%} {:>3}/{:>3}, statistics[{}]'.format(
+                    episode,
+                    t, 
+                    env.get_eb_count, 
+                    R, 
+                    env.twn.enagy, 
+                    env.get_current_trainer().success_rate, 
+                    env.get_current_trainer().success_count, 
+                    env.get_current_trainer().try_count, 
+                    agent.get_statistics_formated_string()
+                    ))
 
             if done:
                 final_step = t
@@ -270,14 +260,28 @@ def func_demo(args, mq, env_name, func_agent_generation):
                     elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type2_2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type8.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type9.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type10.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
                         av_data = agent.agent.q_function.model.debug_info[0].data
                     env.render(add_info=[av_data.reshape(1,-1)])
-                    stat = agent.get_statistics()
-                    logger.info('episode: {}  turn: {} EB: {} R: {}  statistics [{}]  TWN enagy: {}'.format(episode, t, env.get_eb_count, R, stat, env.twn.enagy))
-    
+                    logger.info('episode:{:>3} turn:{:>4} EB:{:>3} R:{: >7.1f}  Enagy:{: 4.1f} success rate:{:>4.0%} {:>3}/{:>3}, statistics[{}]'.format(
+                        episode,
+                        t, 
+                        env.get_eb_count, 
+                        R, 
+                        env.twn.enagy, 
+                        env.get_current_trainer().success_rate, 
+                        env.get_current_trainer().success_count, 
+                        env.get_current_trainer().try_count, 
+                        agent.get_statistics_formated_string()
+                        ))
+
                 if done:
                     break
             agent.stop_episode()
             stat = agent.get_statistics()
-            logger.info('episode: {}  R: {}  statistics [(average_q: {}), (average_loss: {})]'.format(episode, R, stat[0][1], stat[1][1]))
+            logger.info('episode:{:>3} R:{: >7.1f}  Enagy:{: 4.1f}, statistics[{}]'.format(
+                episode,
+                R, 
+                env.twn.enagy, 
+                agent.get_statistics_formated_string()
+                ))
         logger.info('Finish evaluation.')
 
     else:
@@ -310,14 +314,28 @@ def func_demo(args, mq, env_name, func_agent_generation):
                                 elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type2_2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type8.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type9.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type10.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
                                     av_data = agent.agent.q_function.model.debug_info[0].data
                                 env.render(add_info=[av_data.reshape(1,-1)])
-                                stat = agent.get_statistics()
-                                logger.info('episode: {}  turn: {}  R: {}  statistics [(average_q: {}), (average_loss: {})]  TWN enagy: {}'.format(episode, t, R, stat[0][1], stat[1][1], env.twn.enagy))
+                                logger.info('episode:{:>3} turn:{:>4} EB:{:>3} R:{: >7.1f}  Enagy:{: 4.1f} success rate:{:>4.0%} {:>3}/{:>3}, statistics[{}]'.format(
+                                    episode,
+                                    t, 
+                                    env.get_eb_count, 
+                                    R, 
+                                    env.twn.enagy, 
+                                    env.get_current_trainer().success_rate, 
+                                    env.get_current_trainer().success_count, 
+                                    env.get_current_trainer().try_count, 
+                                    agent.get_statistics_formated_string()
+                                    ))
                 
                             if done:
                                 break
                         agent.stop_episode()
                         stat = agent.get_statistics()
-                        logger.info('episode: {}  R: {}  statistics [(average_q: {}), (average_loss: {})]'.format(episode, R, stat[0][1], stat[1][1]))
+                        logger.info('episode:{:>3} R:{: >7.1f}  Enagy:{: 4.1f}, statistics[{}]'.format(
+                            episode,
+                            R, 
+                            env.twn.enagy, 
+                            agent.get_statistics_formated_string()
+                            ))
                     logger.info('Finish evaluation.')
                     print('Finish evaluation.')
             elif msg == Evaluation_Cmd.FINISH:
