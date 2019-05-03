@@ -328,8 +328,21 @@ def func_demo(args, mq, env_name, func_agent_generation):
 
     env.finish()
 
+def lowpriority():
+    import os
+    import platform
+    import psutil
+
+    proc = psutil.Process( os.getpid() )
+    if platform.system() == 'Windows':
+        proc.nice( psutil.BELOW_NORMAL_PRIORITY_CLASS )
+    else:
+        proc.nice(19)
+
 if __name__ == '__main__':
     mp.freeze_support()
+
+    lowpriority()
     
 #    logging.basicConfig(level=logging.DEBUG)
     logging.basicConfig(level=logging.CRITICAL)
