@@ -35,6 +35,7 @@ from chainerrl.agents import dqn
 
 import success_buffer_replay
 import SuccessRateEpsilonGreedy
+import twn_model_base
 
 
 class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
@@ -373,7 +374,7 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
                 )
 
 
-class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
+class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAgentMixin):
 
     saved_attributes = ['cnn_ae', 'q_func', 'q_func_opt']
 
@@ -586,6 +587,18 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
 #        if self.last_losses is not None:
 #            ans.extend([('cnn1_loss', self.last_losses[0].data), ('cnn2_loss', self.last_losses[1].data), ('clasify_loss', self.last_losses[2].data)])
         ans.extend(self.agent.get_statistics())
+        return ans
+
+    def get_statistics_formated_string(self):
+        stat = self.get_statistics()
+        ans = '({}:{: >6.2f}), ({}: {: >5.2f}), (explorer rate({: >6}): {:>7.3%})'.format(
+            stat[0][0], 
+            stat[0][1], 
+            stat[1][0], 
+            stat[1][1], 
+            self.agent.t, 
+            self.explorer.compute_epsilon(self.agent.t)
+            )
         return ans
 
 
