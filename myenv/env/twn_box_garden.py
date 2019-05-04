@@ -808,7 +808,7 @@ class TWN_BoxGardenEnv(gym.Env):
         if done:
             self.current_trainer.check_end_status(ob_return, reward_map, eb_in_flag)
             for tr in self.trainers:
-                self.logger.critical('tr: {}  success rate: {}'.format(tr.__class__.__name__, tr.get_success_rate()))
+                self.logger.critical('tr: {}  success rate: {}'.format(tr.__class__.__name__, tr.success_rate))
 
         self.cumulative_value_of_reward = reward + self.cumulative_value_of_reward * 0.99
 #        self.cumulative_value_of_reward += reward
