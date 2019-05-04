@@ -220,7 +220,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
         if mq_training_result_graph is not None:
             msg = (episode, env.get_eb_count, final_step, R, done)
             logger.info('msg: {}'.format(msg))
-            mq_training_result_graph.put_nowait((episode, env.get_eb_count, final_step, R, tuple(tn.get_success_rate() for tn in env.trainers)))
+            mq_training_result_graph.put_nowait((episode, env.get_eb_count, final_step, R, tuple(tn.success_rate for tn in env.trainers)))
 
     logger.info('Finish training.')
 
