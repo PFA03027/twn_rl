@@ -291,7 +291,7 @@ class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
         self.scn.subplot_list[1].ax.set_ylabel('y')
 
         self.scn.subplot_list[2].ax.set_xlim(0.0, 300.0)
-        self.scn.subplot_list[2].ax.set_ylim(-300.0, 100.0)
+        self.scn.subplot_list[2].ax.set_ylim(-600.0, 100.0)
         self.scn.subplot_list[2].ax.set_xlabel('update count')
         self.scn.subplot_list[2].ax.set_ylabel('cumulative value of reward')
         self.scn.subplot_list[2].post_update_func = reward_screen_post_update
@@ -307,7 +307,7 @@ class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
         self.scn.subplot_list[4].ax.set_ylabel('Velocity')
 
         self.scn.subplot_list[5].ax.set_xlim(0, 25)
-        self.scn.subplot_list[5].ax.set_ylim(-150, 150)
+        self.scn.subplot_list[5].ax.set_ylim(-500, 150)
         self.scn.subplot_list[5].ax.set_xlabel('action index')
         self.scn.subplot_list[5].ax.set_ylabel('Q value')
 
@@ -649,64 +649,45 @@ class TWN_BoxGardenEnv(gym.Env):
         return ob_return
     
     def step_calc_reward(self, collision_count, eb_flag):
+        """ EBを取得できたときに限り、報酬がプラスとなる報酬体系とする。
+            途中状態は、必ず、-1.0以下となる。
+
+        """
 
         reward_map = { 'enagy_asumption': -1.0 }
 
         reward_map['collision'] = -collision_count
-#                    if self.training_step == 3:
-#                        reward_map['collision'] += -1.0
-#                    else:
-#                        reward_map['collision'] = -1.0
-
-        # エネルギー体へ接近出来たら報酬
-        reward_map['distance_diff'] = 0.0
-#        if self.old_ob3 is not None:
-#            if self.ob3[2] > 0.5:
-#                if abs(ob3_angle) > math.pi/180.0*10.0:
-#                    if (self.old_ob3[2] * 0.99) > self.ob3[2]:
-#                        reward_map['distance_diff'] = -1.0        #print('angle:', ob3_angle/math.pi*180.0)
-#            else:
-#                if (self.old_ob3[2] * 1.01) < self.ob3[2]:
-#                    # 前の位置よりも近づいているようなら、+1の報酬
-#                    reward_map['distance_diff'] = 1.0
-#                elif (self.old_ob3[2] * 0.99) > self.ob3[2]:
-#                    reward_map['distance_diff'] = -1.0        #print('angle:', ob3_angle/math.pi*180.0)
 
         # 十分に近づいたら、距離の情報は報酬にしない。EBを入手するには向きが重要。
-        reward_map['in_angle'] = 0.0
         ob3_angle = math.atan2( self.ob3[1], self.ob3[0])
+        reward_map['in_angle'] = -1.0
+        if abs(ob3_angle) > math.pi/180.0*60.0:
+            reward_map['in_angle'] = -2.0
+        elif abs(ob3_angle) < math.pi/180.0*10.0:
+            reward_map['in_angle'] = 0.0    # 報酬体系にメリハリをつけて、価値の判断がはっきりできるようにする。
+
         if self.ob3[2] > 0.5:
             reward_map['distance'] = 0.0
-            if abs(ob3_angle) > math.pi/180.0*60.0:
-                reward_map['in_angle'] = -1.0
-            elif abs(ob3_angle) < math.pi/180.0*10.0:
-                reward_map['in_angle'] = 1.0    # 報酬体系にメリハリをつけて、価値の判断がはっきりできるようにする。
         else:
             reward_map['distance'] = self.ob3[2] - 0.5
-            if abs(ob3_angle) < math.pi/180.0*10.0:
-                reward_map['in_angle'] = 1.0    # 報酬体系にメリハリをつけて、価値の判断がはっきりできるようにする。
 
+        # エネルギー体へ接近出来たら報酬
+        reward_map['distance_diff'] = -1.0      # 接近できなければ-1
         if self.old_dist is not None:
 #            if (self.old_dist * 1.10) < self.ob3[2]:
-            if self.old_dist < self.ob3[2]:
-                # 前の位置よりも近づいているようなら、+1の報酬
-                reward_map['distance_diff'] = 1.0
+            if (self.old_dist * 1.05) < self.ob3[2]:
+                # 前の位置よりも近づいているようなら、±0の報酬
+                reward_map['distance_diff'] = 0.0
                 self.old_dist = self.ob3[2]
             else:
                 # 前の位置よりも近づいていないなら、角度評価のプラス報酬はつけない
-                if reward_map['in_angle'] > 0.0:
-                   reward_map['in_angle'] = 0.0 
                 if (self.old_dist * 0.98) > self.ob3[2]:
-                    reward_map['distance_diff'] = -1.0        #print('angle:', ob3_angle/math.pi*180.0)
-                    self.old_dist = self.ob3[2] / 0.98
+                    # if reward_map['in_angle'] > -1.0:
+                    #     reward_map['in_angle'] = -1.0 
+                    reward_map['distance_diff'] = -2.0        #print('angle:', ob3_angle/math.pi*180.0)
+                    self.old_dist = self.ob3[2]
         else:
             self.old_dist = self.ob3[2]
-#        if self.old_ob3 is not None:
-#            if (self.old_ob3[2] * 1.01) < self.ob3[2]:
-#                # 前の位置よりも近づいているようなら、+1の報酬
-#                reward_map['distance_diff'] = 1.0
-#            elif (self.old_ob3[2] * 0.99) > self.ob3[2]:
-#                reward_map['distance_diff'] = -1.0        #print('angle:', ob3_angle/math.pi*180.0)
 
         # 報酬を求める
         if eb_flag:  # ご飯にありつけた
@@ -718,7 +699,7 @@ class TWN_BoxGardenEnv(gym.Env):
                 reward_map['enagy_up'] -= self.twn.enagy - twn.TwoWheelMover.max_enagy
                 self.twn.enagy = twn.TwoWheelMover.max_enagy
             reward_map['enagy_up'] /= twn.TwoWheelMover.max_enagy
-            reward_map['enagy_up'] *= 10.0
+            reward_map['enagy_up'] *= 100.0
             reward_map['enagy_up'] += 1.0
 
         if self.twn.enagy <= 0.0:
@@ -726,44 +707,6 @@ class TWN_BoxGardenEnv(gym.Env):
 
         return reward_map
     
-    def step_calc_reward2(self, collision_count, eb_flag):
-
-        reward_map = {}
-
-        reward_map['collision'] = -collision_count
-#                    if self.training_step == 3:
-#                        reward_map['collision'] += -1.0
-#                    else:
-#                        reward_map['collision'] = -1.0
-
-        # エネルギー体へ接近出来たら報酬
-        reward_map['distance'] = self.ob3[2]
-
-        reward_map['in_angle'] = 0.0
-        ob3_angle = math.atan2( self.ob3[1], self.ob3[0])
-        if abs(ob3_angle) > math.pi/180.0*60.0:
-            reward_map['in_angle'] = -1.0
-        elif abs(ob3_angle) < math.pi/180.0*10.0:
-            reward_map['in_angle'] = 1.0    # 報酬体系にメリハリをつけて、価値の判断がはっきりできるようにする。
-
-
-        # 報酬を求める
-        if eb_flag:  # ご飯にありつけた
-            self.twn.enagy += TWN_BoxGardenEnv.eb_enagy
-            reward_map['enagy_up'] = TWN_BoxGardenEnv.eb_enagy
-            if self.twn.enagy > twn.TwoWheelMover.max_enagy:
-                # 満腹以上分は、報酬を与えない。
-                # reward_map['enagy_up'] = 1.0 - (self.twn.enagy - twn.TwoWheelMover.max_enagy) / TWN_BoxGardenEnv.eb_enagy
-                reward_map['enagy_up'] -= self.twn.enagy - twn.TwoWheelMover.max_enagy
-                self.twn.enagy = twn.TwoWheelMover.max_enagy
-            reward_map['enagy_up'] /= twn.TwoWheelMover.max_enagy
-            reward_map['enagy_up'] *= 10.0
-            reward_map['enagy_up'] += 1.0
-
-        if self.twn.enagy <= 0.0:
-            reward_map['enagy_zero'] = -10.0
-
-        return reward_map
     
     #def _step(self, action):
     def step(self, action):
@@ -781,7 +724,6 @@ class TWN_BoxGardenEnv(gym.Env):
         
         # 報酬情報の収集
         reward_map = self.step_calc_reward(collision_count, eb_in_flag)
- #       reward_map = self.step_calc_reward2(collision_count, eb_in_flag)
 
         # 終了判定
         if eb_in_flag:  # ご飯にありつけた
