@@ -88,7 +88,7 @@ class circle_object(BoxGarden.bg_object):
         def process_add(self, msg, bg_draw):
             ax = bg_draw.scn.subplot_list[self.plot_target_idx].ax
             
-            self.my_do = dt2.drawobj_circle(ax, self.pos[0], self.pos[1], self.radius, attr='b-')
+            self.my_do = dt2.drawobj_circle(ax, self.pos[0], self.pos[1], self.radius, color='b')
             bg_draw.scn.subplot_list[self.plot_target_idx].append_drawobj(self.my_do)
     
         def process_update(self, msg, bg_draw):
@@ -195,7 +195,7 @@ class circle_wall(BoxGarden.bg_object):
         def process_add(self, msg, bg_draw):
             ax = bg_draw.scn.subplot_list[self.plot_target_idx].ax
             
-            self.my_do = dt2.drawobj_circle(ax, self.pos[0], self.pos[1], self.radius)
+            self.my_do = dt2.drawobj_circle(ax, self.pos[0], self.pos[1], self.radius, linestyle='--')
             bg_draw.scn.subplot_list[self.plot_target_idx].append_drawobj(self.my_do)
 
         def process_update(self, msg, bg_draw):
@@ -284,7 +284,7 @@ class _my_car_obj(circle_object):
             
             self.my_do = dt2.drawobj_empty()
             self.my_do.move = self.pos
-            dt2.drawobj_circle(ax, 0.0, 0.0, 1.0, attr='r-', parent=self.my_do)
+            dt2.drawobj_circle(ax, 0.0, 0.0, 1.0, color='r', linestyle='-', parent=self.my_do)
             dt2.drawobj_triangle(ax, 0.0, 0.0, -0.5, -math.sqrt(0.75), 0.5, -math.sqrt(0.75), parent=self.my_do)
             
             bg_draw.scn.subplot_list[self.plot_target_idx].append_drawobj(self.my_do)

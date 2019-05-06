@@ -61,7 +61,7 @@ def training_log_graph(mq, window_title):
     scn.subplot_list[0].ax.grid()
     
     EB_count_graph_ax = scn.subplot_list[0].ax
-    EB_count_graph_line = dt2.drawobj_poly(EB_count_graph_ax, attr='b-')
+    EB_count_graph_line = dt2.drawobj_poly(EB_count_graph_ax, color='b', linestyle='-')
     scn.subplot_list[0].append_drawobj(EB_count_graph_line)
     
     scn.subplot_list[1].ax.set_xlim(0, max_episode)
@@ -71,7 +71,7 @@ def training_log_graph(mq, window_title):
     scn.subplot_list[1].ax.grid()
     
     final_step_count_graph_ax = scn.subplot_list[1].ax
-    final_step_count_graph_line = dt2.drawobj_poly(final_step_count_graph_ax, attr='b-')
+    final_step_count_graph_line = dt2.drawobj_poly(final_step_count_graph_ax, color='b', linestyle='-')
     scn.subplot_list[2].append_drawobj(final_step_count_graph_line)
     
     scn.subplot_list[2].ax.set_xlim(0, max_episode)
@@ -81,7 +81,7 @@ def training_log_graph(mq, window_title):
     scn.subplot_list[2].ax.grid()
     
     final_reward_graph_ax = scn.subplot_list[2].ax
-    final_reward_graph_line = dt2.drawobj_poly(final_reward_graph_ax, attr='b-')
+    final_reward_graph_line = dt2.drawobj_poly(final_reward_graph_ax, color='b', linestyle='-')
     scn.subplot_list[2].append_drawobj(final_reward_graph_line)
     
     scn.subplot_list[3].ax.set_xlim(0, max_episode)

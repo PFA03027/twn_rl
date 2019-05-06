@@ -169,10 +169,11 @@ class drawobj_circle_point(drawobj_base):
     '''
         小さい円で点を表す描画オブジェクト
     '''
-    def __init__( self, ax, x, y, attr='bo', parent=None ):
+    def __init__( self, ax, x, y, parent=None, **kwargs ):
         self.x = [x]
         self.y = [y]
-        self.point, = ax.plot(self.x, self.y, attr, ms=4)
+        kwargs.update({'marker':'o'})
+        self.point, = ax.plot(self.x, self.y, **kwargs)
         super().__init__(parent=parent, plot_obj=self.point)
 
     def update( self, x, y ):
@@ -197,10 +198,10 @@ class drawobj_line(drawobj_base):
     '''
         2点間を結ぶ直線を表す描画オブジェクト
     '''
-    def __init__( self, ax, x1, y1, x2, y2, attr='y-', parent=None ):
+    def __init__( self, ax, x1, y1, x2, y2, parent=None, **kwargs ):
         self.x = [x1, x2]
         self.y = [y1, y2]
-        self.line, = ax.plot(self.x, self.y, attr, ms=4)
+        self.line, = ax.plot(self.x, self.y, **kwargs )     # , color='y', linestyle='-', markersize=4.0
         super().__init__(parent=parent, plot_obj=self.line)
 
     def update( self, x1, y1, x2, y2 ):
@@ -225,10 +226,10 @@ class drawobj_triangle(drawobj_base):
     '''
         三角形を表す描画オブジェクト
     '''
-    def __init__( self, ax, x1, y1, x2, y2, x3, y3, attr='y-', parent=None ):
+    def __init__( self, ax, x1, y1, x2, y2, x3, y3, parent=None, **kwargs ):
         self.x = [x1, x2, x3, x1]
         self.y = [y1, y2, y3, y1]
-        self.triangle, = ax.plot(self.x, self.y, attr, ms=4)
+        self.triangle, = ax.plot(self.x, self.y, **kwargs )     # , color='y', linestyle='-', markersize=4.0
         super().__init__(parent=parent, plot_obj=self.triangle)
         
     def update(self, x1, y1, x2, y2, x3, y3):
@@ -253,13 +254,10 @@ class drawobj_poly(drawobj_base):
     '''
         複数点間を結ぶポリゴン描画オブジェクト
     '''
-    def __init__( self, ax, attr=None, parent=None ):
+    def __init__( self, ax, parent=None, **kwargs ):
         self.x = []
         self.y = []
-        if attr is None:
-            self.poly, = ax.plot(self.x, self.y)
-        else:
-            self.poly, = ax.plot(self.x, self.y, attr)
+        self.poly, = ax.plot(self.x, self.y, **kwargs)
         super().__init__(parent=parent, plot_obj=self.poly)
         
     def append(self, x, y):
@@ -297,9 +295,9 @@ class drawobj_circle(drawobj_base):
             y[i] = b + r*np.sin(theta)
         return x, y
 
-    def __init__( self, ax, x1, y1, R, attr='g--', parent=None ):
+    def __init__( self, ax, x1, y1, R, parent=None, **kwargs ):
         self.x, self.y = self.circle(x1, y1, R)
-        self.circle_poly, = ax.plot(self.x, self.y, attr, ms=4)
+        self.circle_poly, = ax.plot(self.x, self.y, **kwargs)
         super().__init__(parent=parent, plot_obj=self.circle_poly)
         
     def update(self, a, b, r):
@@ -332,9 +330,9 @@ class drawobj_arc(drawobj_base):
             y[i] = b + r*np.sin(theta)
         return x, y
 
-    def __init__( self, ax, x1, y1, R, s_angle=0.0, e_angle=2*np.pi, attr='g--', parent=None ):
+    def __init__( self, ax, x1, y1, R, s_angle=0.0, e_angle=2*np.pi, parent=None, **kwargs ):
         self.x, self.y = self.arc(x1, y1, R, s_angle, e_angle)
-        self.arc_poly, = ax.plot(self.x, self.y, attr, ms=4)
+        self.arc_poly, = ax.plot(self.x, self.y, **kwargs)      # , color='g', linestyle='--', markersize=4.0
         super().__init__(parent=parent, plot_obj=self.arc_poly)
         
     def update(self, a, b, r, s_angle, e_angle):

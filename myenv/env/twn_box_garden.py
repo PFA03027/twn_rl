@@ -107,16 +107,16 @@ class my_car_obj(bg_obj.circle_object):
             
             self.my_do = dt2.drawobj_empty()
             self.my_do.move = self.pos
-            dt2.drawobj_circle(ax, 0.0, 0.0, my_car_obj.radius, attr='r-', parent=self.my_do)
-            dt2.drawobj_triangle(ax, 0.0, 0.0, -math.sqrt(0.75), 0.5, -math.sqrt(0.75), -0.5, parent=self.my_do)
+            dt2.drawobj_circle(ax, 0.0, 0.0, my_car_obj.radius, color='r', parent=self.my_do)
+            dt2.drawobj_triangle(ax, 0.0, 0.0, -math.sqrt(0.75), 0.5, -math.sqrt(0.75), -0.5, parent=self.my_do, color='y')
             
             bg_draw.scn.subplot_list[self.plot_target_idx].append_drawobj(self.my_do)
 
             ax2 = bg_draw.scn.subplot_list[self.plot_target_idx+1].ax
     
-            self.line2 = dt2.drawobj_poly(ax2, attr='r-')
-            self.line2_b1 = dt2.drawobj_poly(ax2, attr='g-')
-            self.line2_b2 = dt2.drawobj_poly(ax2, attr='b-')
+            self.line2 = dt2.drawobj_poly(ax2, color='r')
+            self.line2_b1 = dt2.drawobj_poly(ax2, color='g')
+            self.line2_b2 = dt2.drawobj_poly(ax2, color='b')
             for i in range(my_car_obj.num_of_ray):
                 self.line2.append( -180 + i*360.0/my_car_obj.num_of_ray, 0.0 )
                 self.line2_b1.append( -180 + i*360.0/my_car_obj.num_of_ray, 0.0 )
@@ -127,33 +127,38 @@ class my_car_obj(bg_obj.circle_object):
             bg_draw.scn.subplot_list[self.plot_target_idx+1].append_drawobj(self.line2_b2)
 
             ax5 = bg_draw.scn.subplot_list[self.plot_target_idx+2].ax
-            self.cum_reward = dt2.drawobj_poly(ax5, attr='b-')
+            self.cum_reward = dt2.drawobj_poly(ax5, color='b')
             self.cum_reward.append( 0.0, 0.0 )
             bg_draw.scn.subplot_list[self.plot_target_idx+2].append_drawobj(self.cum_reward)
 
             ax4 = bg_draw.scn.subplot_list[self.plot_target_idx+3].ax
-            self.eb_direction = dt2.drawobj_poly(ax4, attr='r-')
+            self.eb_get_range = dt2.drawobj_poly(ax4, **{'linestyle': '--', 'color': 'silver'})
+            self.eb_get_range.append( math.cos(math.pi*100.0/180.0), math.sin(math.pi*100.0/180.0) )
+            self.eb_get_range.append( 0.0, 0.0 )
+            self.eb_get_range.append( math.cos(math.pi* 80.0/180.0), math.sin(math.pi* 80.0/180.0) )
+            bg_draw.scn.subplot_list[self.plot_target_idx+3].append_drawobj(self.eb_get_range)
+            self.eb_direction = dt2.drawobj_poly(ax4, color='r')
             self.eb_direction.append( 0.0, 0.0 )
             self.eb_direction.append( 0.0, 0.0 )
             bg_draw.scn.subplot_list[self.plot_target_idx+3].append_drawobj(self.eb_direction)
             self.touch_sensors = []
             for i in range(4):
-                local_touch_sensors = dt2.drawobj_arc(ax4, 0.0, 0.0, 0.99, np.pi/4.0+(np.pi/2.0*i), np.pi*3.0/4.0+(np.pi/2.0*i), attr='c-')
+                local_touch_sensors = dt2.drawobj_arc(ax4, 0.0, 0.0, 0.99, np.pi/4.0+(np.pi/2.0*i), np.pi*3.0/4.0+(np.pi/2.0*i), color='c')
                 self.touch_sensors.append(local_touch_sensors)
                 bg_draw.scn.subplot_list[self.plot_target_idx+3].append_drawobj(local_touch_sensors)
 
             ax6 = bg_draw.scn.subplot_list[self.plot_target_idx+4].ax
-            self.twn_wh_v_left = dt2.drawobj_poly(ax6, attr='r-')
+            self.twn_wh_v_left = dt2.drawobj_poly(ax6, color='r')
             self.twn_wh_v_left.append( -0.5, 0.0 )
             self.twn_wh_v_left.append( -0.5, 0.0 )
             bg_draw.scn.subplot_list[self.plot_target_idx+4].append_drawobj(self.twn_wh_v_left)
-            self.twn_wh_v_right = dt2.drawobj_poly(ax6, attr='r-')
+            self.twn_wh_v_right = dt2.drawobj_poly(ax6, color='r')
             self.twn_wh_v_right.append(  0.5, 0.0 )
             self.twn_wh_v_right.append(  0.5, 0.0 )
             bg_draw.scn.subplot_list[self.plot_target_idx+4].append_drawobj(self.twn_wh_v_right)
 
             ax7 = bg_draw.scn.subplot_list[self.plot_target_idx+5].ax
-            self.add_info = dt2.drawobj_poly(ax7, attr='b-')
+            self.add_info = dt2.drawobj_poly(ax7, color='b')
             self.add_info.append( 0.0, 0.0 )
             bg_draw.scn.subplot_list[self.plot_target_idx+5].append_drawobj(self.add_info)
 
