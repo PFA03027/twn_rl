@@ -42,6 +42,7 @@ import twn_DDQN_agent_Type8
 import twn_DDQN_agent_Type9
 import twn_DDQN_agent_Type10
 import twn_DDQN_agent_Type11
+import twn_DDQN_agent_Type12
 
 import myenv.env.drawing_trace2 as dt2
 from matplotlib import animation
@@ -158,9 +159,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
         end_count += env.get_eb_count
     agent = func_agent_generation(args, env, load_flag, explor_rate, load_name=func_agent_generation.__module__)
     
-
-#    for episode in range(num_episodes):  #試行数分繰り返す
-    while env.get_eb_count < end_count:
+    for episode in range(num_episodes):  #試行数分繰り返す
         episode += 1
         observation = env.reset()
         done = False
@@ -168,7 +167,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
         R = 0
         final_step = 0
         for t in range(max_number_of_steps):  #1試行のループ
-            if isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
+            if isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN):
                 agent.set_success_rate(env.get_current_trainer().success_rate)
             action = agent.act_and_train(observation, reward)
             reward = 0
@@ -181,7 +180,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
                 if isinstance(agent, chainerrl.agents.DoubleDQN):
                     av_data = agent.q_function.model.debug_info[0].data
                     tmp_add_info = [av_data.reshape(1,-1)]
-                elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type8.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type9.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type10.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
+                elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type8.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type9.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type10.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN):
                     av_data = agent.agent.q_function.model.debug_info[0].data
                     tmp_add_info = [av_data.reshape(1,-1)]
                     if agent.cnn_ae.debug_info is not None:
@@ -190,7 +189,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
                         tmp_add_info.extend([agent.cnn_ae.debug_info[0][3][0,:,:].reshape(-1), agent.cnn_ae.debug_info[0][2][0,:,:].reshape(-1)])
 
                 env.render(add_info=tmp_add_info)
-                logger.info('episode:{:>3} turn:{:>4} EB:{:>3} R:{: >7.1f}  Enagy:{: 4.1f} success rate:{:>4.0%} {:>3}/{:>3}, statistics[{}]'.format(
+                logger.info('episode:{:>3} turn:{:>4} EB:{:>3} R:{: >7.1f}  Enagy:{: 6.1f} success rate:{:>4.0%} {:>3}/{:>3}, statistics[{}]'.format(
                     episode,
                     t, 
                     env.get_eb_count, 
@@ -208,7 +207,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
         else:
             final_step = max_number_of_steps
 
-        agent.stop_episode_and_train(observation, reward, done)
+        agent.stop_episode_and_train(observation, reward, done=True)
         stat = agent.get_statistics()
         logger.info('episode: {}  R: {}  statistics [(average_q: {}), (average_loss: {})]'.format(episode, R, stat[0][1], stat[1][1]))
         agent.save('agent_{}'.format(func_agent_generation.__module__))
@@ -221,6 +220,12 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
             msg = (episode, env.get_eb_count, final_step, R, done)
             logger.info('msg: {}'.format(msg))
             mq_training_result_graph.put_nowait((episode, env.get_eb_count, final_step, R, tuple(tn.success_rate for tn in env.trainers)))
+        
+        if env.trainers[4].try_count > 200:
+            break
+        else:
+            if env.trainers[4].success_count > 100:
+                break
 
     logger.info('Finish training.')
 
@@ -419,7 +424,8 @@ if __name__ == '__main__':
 #    func_agent_generation = twn_DDQN_agent_Type9.func_agent_generation
 #    func_agent_generation = twn_DDQN_agent_Type2_2.func_agent_generation
 #    func_agent_generation = twn_DDQN_agent_Type10.func_agent_generation
-    func_agent_generation = twn_DDQN_agent_Type11.func_agent_generation
+#    func_agent_generation = twn_DDQN_agent_Type11.func_agent_generation
+    func_agent_generation = twn_DDQN_agent_Type12.func_agent_generation
    
     if args.demo:
         func_demo(args, None, env_name, func_agent_generation)

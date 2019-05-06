@@ -112,7 +112,7 @@ class my_car_obj(bg_obj.circle_object):
             
             bg_draw.scn.subplot_list[self.plot_target_idx].append_drawobj(self.my_do)
 
-            ax2 = bg_draw.scn.subplot_list[self.plot_target_idx+1].ax
+            ax2 = bg_draw.scn.subplot_list[self.plot_target_idx+2].ax
     
             self.line2 = dt2.drawobj_poly(ax2, color='r')
             self.line2_b1 = dt2.drawobj_poly(ax2, color='g')
@@ -122,14 +122,14 @@ class my_car_obj(bg_obj.circle_object):
                 self.line2_b1.append( -180 + i*360.0/my_car_obj.num_of_ray, 0.0 )
                 self.line2_b2.append( -180 + i*360.0/my_car_obj.num_of_ray, 0.0 )
 
-            bg_draw.scn.subplot_list[self.plot_target_idx+1].append_drawobj(self.line2)
-            bg_draw.scn.subplot_list[self.plot_target_idx+1].append_drawobj(self.line2_b1)
-            bg_draw.scn.subplot_list[self.plot_target_idx+1].append_drawobj(self.line2_b2)
+            bg_draw.scn.subplot_list[self.plot_target_idx+2].append_drawobj(self.line2)
+            bg_draw.scn.subplot_list[self.plot_target_idx+2].append_drawobj(self.line2_b1)
+            bg_draw.scn.subplot_list[self.plot_target_idx+2].append_drawobj(self.line2_b2)
 
-            ax5 = bg_draw.scn.subplot_list[self.plot_target_idx+2].ax
+            ax5 = bg_draw.scn.subplot_list[self.plot_target_idx+1].ax
             self.cum_reward = dt2.drawobj_poly(ax5, color='b')
             self.cum_reward.append( 0.0, 0.0 )
-            bg_draw.scn.subplot_list[self.plot_target_idx+2].append_drawobj(self.cum_reward)
+            bg_draw.scn.subplot_list[self.plot_target_idx+1].append_drawobj(self.cum_reward)
 
             ax4 = bg_draw.scn.subplot_list[self.plot_target_idx+3].ax
             self.eb_get_range = dt2.drawobj_poly(ax4, **{'linestyle': '--', 'color': 'silver'})
@@ -290,16 +290,16 @@ class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
         self.scn.subplot_list[0].ax.set_ylabel('y')
         self.scn.subplot_list[0].ax.grid()
 
-        self.scn.subplot_list[1].ax.set_xlim(-180, 180)
-        self.scn.subplot_list[1].ax.set_ylim(-1.0, 1.0)
-        self.scn.subplot_list[1].ax.set_xlabel('x')
-        self.scn.subplot_list[1].ax.set_ylabel('y')
+        self.scn.subplot_list[1].ax.set_xlim(0.0, 300.0)
+        self.scn.subplot_list[1].ax.set_ylim(-600.0, 100.0)
+        self.scn.subplot_list[1].ax.set_xlabel('update count')
+        self.scn.subplot_list[1].ax.set_ylabel('cumulative value of reward')
+        self.scn.subplot_list[1].post_update_func = reward_screen_post_update
 
-        self.scn.subplot_list[2].ax.set_xlim(0.0, 300.0)
-        self.scn.subplot_list[2].ax.set_ylim(-600.0, 100.0)
-        self.scn.subplot_list[2].ax.set_xlabel('update count')
-        self.scn.subplot_list[2].ax.set_ylabel('cumulative value of reward')
-        self.scn.subplot_list[2].post_update_func = reward_screen_post_update
+        self.scn.subplot_list[2].ax.set_xlim(-180, 180)
+        self.scn.subplot_list[2].ax.set_ylim(-1.0, 1.0)
+        self.scn.subplot_list[2].ax.set_xlabel('x')
+        self.scn.subplot_list[2].ax.set_ylabel('y')
 
         self.scn.subplot_list[3].ax.set_xlim(-1, 1)
         self.scn.subplot_list[3].ax.set_ylim(-1, 1)
@@ -928,7 +928,7 @@ class TWN_BoxGardenEnv(gym.Env):
             self.current_trainer = self.trainers[self.try_count % 4]
         else:
             self.training_step = 4
-            self.current_trainer = self.trainers[3+self.try_count % 2]
+            self.current_trainer = self.trainers[1+self.try_count % 4]
         
         self.twn.Reset()
         for collision_retry in range(10):
