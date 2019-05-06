@@ -712,6 +712,36 @@ class TWN_BoxGardenEnv(gym.Env):
 
         return reward_map
     
+    def step_calc_reward2(self, collision_count, eb_flag):
+        """ EBを取得できたときに限り、報酬がプラスとなる報酬体系とする。
+
+        """
+
+        reward_map = { 'enagy_status': self.twn.enagy/twn.TwoWheelMover.max_enagy -1.0 }
+        reward_map['distance'] = self.ob3[2] -1.0
+
+        reward_map['collision'] = -collision_count
+
+        # 十分に近づいたら、距離の情報は報酬にしない。EBを入手するには向きが重要。
+        ob3_angle = math.atan2( self.ob3[1], self.ob3[0])
+        ob3_angle *= 180.0/(20.0+160.0*(1.0-self.ob3[2]))
+        ob3_angle = np.clip(ob3_angle, -math.pi, math.pi)
+        reward_map['angle'] = math.cos(ob3_angle)
+
+        # 報酬を求める
+        if eb_flag:  # ご飯にありつけた
+            self.twn.enagy += TWN_BoxGardenEnv.eb_enagy
+            if self.twn.enagy > twn.TwoWheelMover.max_enagy:
+                self.twn.enagy = twn.TwoWheelMover.max_enagy
+
+            reward_map['enagy_up'] = TWN_BoxGardenEnv.eb_enagy / twn.TwoWheelMover.max_enagy * 100.0
+            reward_map['enagy_up'] += 1.0
+
+        if self.twn.enagy <= 0.0:
+            reward_map['enagy_zero'] = -10.0
+
+        return reward_map
+    
     
     #def _step(self, action):
     def step(self, action):
@@ -728,7 +758,8 @@ class TWN_BoxGardenEnv(gym.Env):
         ob_return = self.gather_observation(col_touch)
         
         # 報酬情報の収集
-        reward_map = self.step_calc_reward(collision_count, eb_in_flag)
+#        reward_map = self.step_calc_reward(collision_count, eb_in_flag)
+        reward_map = self.step_calc_reward2(collision_count, eb_in_flag)
 
         # 終了判定
         if eb_in_flag:  # ご飯にありつけた
