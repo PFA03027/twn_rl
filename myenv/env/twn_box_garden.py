@@ -105,6 +105,7 @@ class my_car_obj(bg_obj.circle_object):
         def process_add(self, msg, bg_draw):
             ax = bg_draw.scn.subplot_list[self.plot_target_idx].ax
             
+            # 0番グラフ
             self.my_do = dt2.drawobj_empty()
             self.my_do.move = self.pos
             dt2.drawobj_circle(ax, 0.0, 0.0, my_car_obj.radius, color='r', parent=self.my_do)
@@ -112,6 +113,7 @@ class my_car_obj(bg_obj.circle_object):
             
             bg_draw.scn.subplot_list[self.plot_target_idx].append_drawobj(self.my_do)
 
+            # 2番グラフ
             ax2 = bg_draw.scn.subplot_list[self.plot_target_idx+2].ax
     
             self.line2 = dt2.drawobj_poly(ax2, color='r')
@@ -126,41 +128,54 @@ class my_car_obj(bg_obj.circle_object):
             bg_draw.scn.subplot_list[self.plot_target_idx+2].append_drawobj(self.line2_b1)
             bg_draw.scn.subplot_list[self.plot_target_idx+2].append_drawobj(self.line2_b2)
 
+            # 1番グラフ
             ax5 = bg_draw.scn.subplot_list[self.plot_target_idx+1].ax
             self.cum_reward = dt2.drawobj_poly(ax5, color='b')
             self.cum_reward.append( 0.0, 0.0 )
             bg_draw.scn.subplot_list[self.plot_target_idx+1].append_drawobj(self.cum_reward)
 
-            ax4 = bg_draw.scn.subplot_list[self.plot_target_idx+3].ax
+            # 4番グラフ
+            ax4 = bg_draw.scn.subplot_list[self.plot_target_idx+4].ax
             self.eb_get_range = dt2.drawobj_poly(ax4, **{'linestyle': '--', 'color': 'silver'})
             self.eb_get_range.append( math.cos(math.pi*100.0/180.0), math.sin(math.pi*100.0/180.0) )
             self.eb_get_range.append( 0.0, 0.0 )
             self.eb_get_range.append( math.cos(math.pi* 80.0/180.0), math.sin(math.pi* 80.0/180.0) )
-            bg_draw.scn.subplot_list[self.plot_target_idx+3].append_drawobj(self.eb_get_range)
+            bg_draw.scn.subplot_list[self.plot_target_idx+4].append_drawobj(self.eb_get_range)
             self.eb_direction = dt2.drawobj_poly(ax4, color='r')
             self.eb_direction.append( 0.0, 0.0 )
             self.eb_direction.append( 0.0, 0.0 )
-            bg_draw.scn.subplot_list[self.plot_target_idx+3].append_drawobj(self.eb_direction)
+            bg_draw.scn.subplot_list[self.plot_target_idx+4].append_drawobj(self.eb_direction)
             self.touch_sensors = []
             for i in range(4):
                 local_touch_sensors = dt2.drawobj_arc(ax4, 0.0, 0.0, 0.99, np.pi/4.0+(np.pi/2.0*i), np.pi*3.0/4.0+(np.pi/2.0*i), color='c')
                 self.touch_sensors.append(local_touch_sensors)
-                bg_draw.scn.subplot_list[self.plot_target_idx+3].append_drawobj(local_touch_sensors)
+                bg_draw.scn.subplot_list[self.plot_target_idx+4].append_drawobj(local_touch_sensors)
 
-            ax6 = bg_draw.scn.subplot_list[self.plot_target_idx+4].ax
+            # 5番グラフ
+            ax6 = bg_draw.scn.subplot_list[self.plot_target_idx+5].ax
             self.twn_wh_v_left = dt2.drawobj_poly(ax6, color='r')
             self.twn_wh_v_left.append( -0.5, 0.0 )
             self.twn_wh_v_left.append( -0.5, 0.0 )
-            bg_draw.scn.subplot_list[self.plot_target_idx+4].append_drawobj(self.twn_wh_v_left)
+            bg_draw.scn.subplot_list[self.plot_target_idx+5].append_drawobj(self.twn_wh_v_left)
             self.twn_wh_v_right = dt2.drawobj_poly(ax6, color='r')
             self.twn_wh_v_right.append(  0.5, 0.0 )
             self.twn_wh_v_right.append(  0.5, 0.0 )
-            bg_draw.scn.subplot_list[self.plot_target_idx+4].append_drawobj(self.twn_wh_v_right)
+            bg_draw.scn.subplot_list[self.plot_target_idx+5].append_drawobj(self.twn_wh_v_right)
 
-            ax7 = bg_draw.scn.subplot_list[self.plot_target_idx+5].ax
+             # 3番グラフ
+            ax7 = bg_draw.scn.subplot_list[self.plot_target_idx+3].ax
             self.add_info = dt2.drawobj_poly(ax7, color='b')
             self.add_info.append( 0.0, 0.0 )
-            bg_draw.scn.subplot_list[self.plot_target_idx+5].append_drawobj(self.add_info)
+            bg_draw.scn.subplot_list[self.plot_target_idx+3].append_drawobj(self.add_info)
+
+            # 8番グラフ
+            ax8 = bg_draw.scn.subplot_list[self.plot_target_idx+8].ax
+            self.clasify_in = dt2.drawobj_poly(ax8, color='b', linewidth=1.0)
+            self.clasify_out = dt2.drawobj_poly(ax8, color='g', linewidth=1.0)
+            self.clasify_dcnv = dt2.drawobj_poly(ax8, color='r', linewidth=1.0)
+            bg_draw.scn.subplot_list[self.plot_target_idx+8].append_drawobj(self.clasify_in)
+            bg_draw.scn.subplot_list[self.plot_target_idx+8].append_drawobj(self.clasify_out)
+            bg_draw.scn.subplot_list[self.plot_target_idx+8].append_drawobj(self.clasify_dcnv)
 
         def process_msg(self, msg, bg_draw):
             '''
@@ -185,6 +200,11 @@ class my_car_obj(bg_obj.circle_object):
                     self.update_count = 0
                     self.add_info.clear()
                     self.add_info.append( 0.0, 0.0 )
+
+                    self.clasify_in.clear()
+                    self.clasify_dcnv.clear()
+                    self.clasify_out.clear()
+
                 elif msg.my_car_cmd == my_car_obj.my_car_msg_ID.UPDATE_POS_ATTRS:
                     self.my_do.move = msg.new_pos
                     self.my_do.rot_theata = msg.new_rot_theata
@@ -219,6 +239,25 @@ class my_car_obj(bg_obj.circle_object):
                                     self.line2_b1.y[i] = self.attrs[4][1].data[i]
                                     self.line2_b2.y[i] = self.attrs[4][2].data[i]
                                 
+                            if len(self.attrs[4]) >= 6:
+                                if len(self.clasify_in.y) != len(self.attrs[4][4].data):
+                                    self.clasify_in.clear()
+                                    self.clasify_dcnv.clear()
+                                    for i in range(len(self.attrs[4][4].data)):
+                                        self.clasify_in.append( i*22*64/len(self.attrs[4][4].data), self.attrs[4][4].data[i] )
+                                        self.clasify_dcnv.append( i*22*64/len(self.attrs[4][4].data), self.attrs[4][5].data[i] )
+                                else:
+                                    for i in range(len(self.attrs[4][4].data)):
+                                        self.clasify_in.y[i]   = self.attrs[4][4].data[i]
+                                        self.clasify_dcnv.y[i] = self.attrs[4][5].data[i]
+
+                                if len(self.clasify_out.y) != len(self.attrs[4][3].data):
+                                    self.clasify_out.clear()
+                                    for i in range(len(self.attrs[4][3].data)):
+                                        self.clasify_out.append( i * 22*64 / len(self.attrs[4][3].data), self.attrs[4][3].data[i] - 1.0 )
+                                else:
+                                    for i in range(len(self.attrs[4][3].data)):
+                                        self.clasify_out.y[i]  = self.attrs[4][3].data[i] - 1.0
 
                             #print("process_msg: self.line2.y[i]: ", self.line2.y[i])
                     # print("process_msg: self.move: ", self.my_do.move)
@@ -274,7 +313,7 @@ class my_car_obj(bg_obj.circle_object):
 
 class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
     def __init__(self):
-        super().__init__([2,3])
+        super().__init__([3,4])
 
     def start_screen(self):
         def reward_screen_post_update(ax):
@@ -301,20 +340,25 @@ class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
         self.scn.subplot_list[2].ax.set_xlabel('x')
         self.scn.subplot_list[2].ax.set_ylabel('y')
 
-        self.scn.subplot_list[3].ax.set_xlim(-1, 1)
-        self.scn.subplot_list[3].ax.set_ylim(-1, 1)
-        self.scn.subplot_list[3].ax.set_xlabel('L<-->R')
-        self.scn.subplot_list[3].ax.set_ylabel('B<-->F')
-
         self.scn.subplot_list[4].ax.set_xlim(-1, 1)
         self.scn.subplot_list[4].ax.set_ylim(-1, 1)
         self.scn.subplot_list[4].ax.set_xlabel('L<-->R')
-        self.scn.subplot_list[4].ax.set_ylabel('Velocity')
+        self.scn.subplot_list[4].ax.set_ylabel('B<-->F')
 
-        self.scn.subplot_list[5].ax.set_xlim(0, 25)
-        self.scn.subplot_list[5].ax.set_ylim(-500, 150)
-        self.scn.subplot_list[5].ax.set_xlabel('action index')
-        self.scn.subplot_list[5].ax.set_ylabel('Q value')
+        self.scn.subplot_list[5].ax.set_xlim(-1, 1)
+        self.scn.subplot_list[5].ax.set_ylim(-1, 1)
+        self.scn.subplot_list[5].ax.set_xlabel('L<-->R')
+        self.scn.subplot_list[5].ax.set_ylabel('Velocity')
+
+        self.scn.subplot_list[3].ax.set_xlim(0, 25)
+        self.scn.subplot_list[3].ax.set_ylim(-500, 150)
+        self.scn.subplot_list[3].ax.set_xlabel('action index')
+        self.scn.subplot_list[3].ax.set_ylabel('Q value')
+
+        self.scn.subplot_list[8].ax.set_xlim(0, 22*64)
+        self.scn.subplot_list[8].ax.set_ylim(-2.0, 2.0)
+        self.scn.subplot_list[8].ax.set_xlabel('clasify index')
+        self.scn.subplot_list[8].ax.set_ylabel('clasify output')
 
         self.scn.fig.tight_layout()
 
