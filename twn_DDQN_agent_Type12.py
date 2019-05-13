@@ -38,7 +38,7 @@ import SuccessRateEpsilonGreedy
 import twn_model_base
 
 
-class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
+class Qfunc_FC_TWN2_Vision(chainer.ChainList):
     """AEによるレーダー情報分析層
 
     Args:
@@ -46,160 +46,109 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
         n_clasfy_ray: レーダー情報の分析結果の出力要素数
     """
 
-    class Qfunc_FC_TWN_model_AECNN_for_Ray(chainer.Chain):
-        """ 
-        AutoEncoder of CNN for ray input
-        レーダーセンサーの入力情報に対する畳み込み層のモデル
-        畳み込み層は、特徴抽出ための層となるので、AutoEncoderの手法を利用して、学習を行う。
-        よって、この層は、強化学習の対象とはならない。
+
+    def calc_num_out_elements1D(self, num_element, in_channel, out_channel, filter_size, slide_size, pooling_size):
+        '''
+        num_element: number of input elements per input channel
+        in_channel: number of input channel
+        out_channel: number of output channel
+        filter_size: filter size of convolution
+        slide_size: slide size of filter
+        pooling_size: pooling size for output
         
-        """
-    
-        def calc_num_out_elements1D(self, num_element, in_channel, out_channel, filter_size, slide_size, pooling_size):
-            '''
-            num_element: number of input elements per input channel
-            in_channel: number of input channel
-            out_channel: number of output channel
-            filter_size: filter size of convolution
-            slide_size: slide size of filter
-            pooling_size: pooling size for output
-            
-            return of 1st: number of elements of convolution output
-            return of 2nd: number of elements of pooling output
-            '''
-            num_of_conv_out_elements = (num_element - filter_size)//slide_size + 1
-            num_of_pooling_out_elements = num_of_conv_out_elements//pooling_size
-            if (num_of_conv_out_elements%pooling_size) != 0:
-                num_of_pooling_out_elements += 1
-            
-            return num_of_conv_out_elements, num_of_pooling_out_elements
+        return of 1st: number of elements of convolution output
+        return of 2nd: number of elements of pooling output
+        '''
+        num_of_conv_out_elements = (num_element - filter_size)//slide_size + 1
+        num_of_pooling_out_elements = num_of_conv_out_elements//pooling_size
+        if (num_of_conv_out_elements%pooling_size) != 0:
+            num_of_pooling_out_elements += 1
         
-        def calc_num_out_elementsND(self, num_element, pad_size, in_channel, out_channel, filter_size, slide_size, pooling_size):
-            '''
-            num_element: list type [180, 10]
-            pad_size: list type [1, 1]
-            
-            return: type is np array
-            '''
-            np_num_element = np.array(num_element)
-            np_pad_size = np.array(pad_size)
-            num_of_conv_out_elements = ((np_num_element + np_pad_size) - filter_size)//slide_size + 1
-            num_of_pooling_out_elements = num_of_conv_out_elements//pooling_size
-            num_of_pooling_out_elements[num_of_conv_out_elements%pooling_size != 0] += 1
-            
-            return num_of_conv_out_elements, num_of_pooling_out_elements
+        return num_of_conv_out_elements, num_of_pooling_out_elements
+    
+    def calc_num_out_elementsND(self, num_element, pad_size, in_channel, out_channel, filter_size, slide_size, pooling_size):
+        '''
+        num_element: list type [180, 10]
+        pad_size: list type [1, 1]
         
-        def __init__(self, num_in_elements, num_in_channel=1, out_channel=16, filter_size=5, slide_size=1, pooling_size=2, name=None, dropout_rate=0.0):
-            '''
-            num_in_elements: number of input elements per input channel
-            num_in_channel: number of input channel
-            out_channel: number of output channel
-            filter_size: filter size of convolution
-            slide_size: slide size of filter
-            pooling_size: pooling size for output
-            Name: name of this layer
-            dropout_rate: dropout ratio of output layer
-            '''
-    
-            self.num_in_elements = num_in_elements
-    
-            self.in_channel = num_in_channel
-            self.out_channel = out_channel
-            self.filter_size = filter_size
-            self.slide_size = slide_size
-            self.pooling_size = pooling_size
-            
-            self.dropout_rate = dropout_rate
-    
-            self.num_of_conv_out_elements, self.num_of_pooling_out_elements = self.calc_num_out_elements1D(self.num_in_elements, self.in_channel, self.out_channel, self.filter_size, self.slide_size, self.pooling_size)
-
-            print('Layer {}: in: {} drop rate: {:>4.1%} out: conv out {}  pooling out {}'.format(
-                name,
-                self.num_in_elements,
-                self.dropout_rate,
-                self.num_of_conv_out_elements,
-                self.num_of_pooling_out_elements
-                ))
-
-            super().__init__()
-            with self.init_scope():
-                self.conv = L.ConvolutionND(1, self.in_channel, self.out_channel, ksize=self.filter_size, stride=self.slide_size)
-                self.dcnv = L.DeconvolutionND(1, self.out_channel, self.in_channel, ksize=self.filter_size, stride=self.slide_size)
-            
-        def fwd(self, state):
-            if self.dropout_rate == 0.0:
-                h1 = F.relu(self.conv(state))
-            else:
-                h1 = F.dropout(F.relu(self.conv(state)), ratio=self.dropout_rate)
-                
-            return h1
-
-        def fwd_loss(self, state):
-            h1 = self.fwd(state)
-            dcnv_out = self.dcnv(h1)
-            loss = F.mean_squared_error(dcnv_out, state)
-
-            return [h1, loss, dcnv_out, state]
-
-        def __call__(self, state):
-            '''
-            強化学習用のQ関数ではないので、普通にlossを返す
-            '''
-            return self.fwd_loss(state)[1]
-
-    class Qfunc_FC_TWN_model_AECNN_for_Clasfy(chainer.Chain):
-        """ 
-        レーダーセンサーの入力情報に対する畳み込み層出力後の全結合層
-        特徴抽出ための層となるので、AutoEncoderの手法を利用して、学習を行う。
-        よって、この層は、強化学習の対象とはならない。
+        return: type is np array
+        '''
+        np_num_element = np.array(num_element)
+        np_pad_size = np.array(pad_size)
+        num_of_conv_out_elements = ((np_num_element + np_pad_size) - filter_size)//slide_size + 1
+        num_of_pooling_out_elements = num_of_conv_out_elements//pooling_size
+        num_of_pooling_out_elements[num_of_conv_out_elements%pooling_size != 0] += 1
         
-        """
+        return num_of_conv_out_elements, num_of_pooling_out_elements
     
-        def __init__(self, num_in_elements, num_in_channel, n_clasfy_ray, name=None, dropout_rate=0.0):
-            '''
-            num_in_elements: number of　output elements per output channel of CNN as input
-            num_in_channel: number of　output channel of CNN as input
-            n_clasfy_ray: number of clasify
-            Name: name of this layer
-            dropout_rate: dropout ratio of output layer. this is experimental purpose.
-            '''
+    def gen_conv_link(self, num_in_elements, num_in_channel=1, out_channel=16, filter_size=5, slide_size=1, pooling_size=2, name=None, dropout_rate=0.0):
+        '''
+        num_in_elements: number of input elements per input channel
+        num_in_channel: number of input channel
+        out_channel: number of output channel
+        filter_size: filter size of convolution
+        slide_size: slide size of filter
+        pooling_size: pooling size for output
+        Name: name of this layer
+        dropout_rate: dropout ratio of output layer
+        '''
 
-            self.num_in_elements = num_in_elements
-            self.num_in_channel = num_in_channel
-    
-            self.n_clasfy_ray = n_clasfy_ray
-    
-            self.dropout_rate = dropout_rate
-    
-            super().__init__()
-            with self.init_scope():
-                self.l_in = L.Linear(self.num_in_elements*self.num_in_channel, self.n_clasfy_ray) #クラス分類用
-                self.l_out = L.Linear(self.n_clasfy_ray, self.num_in_elements*self.num_in_channel) #クラス分類用
+        self.num_in_elements = num_in_elements
+
+        self.in_channel = num_in_channel
+        self.out_channel = out_channel
+        self.filter_size = filter_size
+        self.slide_size = slide_size
+        self.pooling_size = pooling_size
+        
+        self.dropout_rate = dropout_rate
+
+        self.num_of_conv_out_elements, self.num_of_pooling_out_elements = self.calc_num_out_elements1D(self.num_in_elements, self.in_channel, self.out_channel, self.filter_size, self.slide_size, self.pooling_size)
+
+        print('Layer {}: in: {} drop rate: {:>4.1%} out: conv out {}  pooling out {}'.format(
+            name,
+            self.num_in_elements,
+            self.dropout_rate,
+            self.num_of_conv_out_elements,
+            self.num_of_pooling_out_elements
+            ))
+
+        self.conv = L.ConvolutionND(1, self.in_channel, self.out_channel, ksize=self.filter_size, stride=self.slide_size)
+        self.dcnv = L.DeconvolutionND(1, self.out_channel, self.in_channel, ksize=self.filter_size, stride=self.slide_size)
             
-            print('Layer {}: in: element {}  channel {}, out: {}'.format(name, self.num_in_elements, self.num_in_channel, self.n_clasfy_ray))
-            
-        def fwd(self, state):
-            if self.dropout_rate == 0.0:
-                h1 = F.sigmoid(self.l_in(state))
-            else:
-                h1 = F.dropout(F.sigmoid(self.l_in(state)), ratio=self.dropout_rate)
+    def gen_clasify_link(self, num_in_elements, num_in_channel, n_clasfy_ray, intermidiate_layers=[], name=None):
+        '''
+        num_in_elements: number of　output elements per output channel of CNN as input
+        num_in_channel: number of　output channel of CNN as input
+        n_clasfy_ray: number of clasify
+        intermidiate_layers: the list of intermidiate units rasio to the number of input units
+        Name: name of this layer
+        dropout_rate: dropout ratio of output layer. this is experimental purpose.
+        '''
 
-            return h1
+        self.cl_num_in_elements = num_in_elements
+        self.cl_num_in_channel = num_in_channel
 
-        def fwd_loss(self, state):
-            h1 = self.fwd(state)
-            dcnv_out = F.reshape(self.l_out(h1), state.shape)
-            loss = F.mean_squared_error(dcnv_out, state)
+        self.n_clasfy_ray = n_clasfy_ray
 
-            return [h1, loss, dcnv_out, state]
+        self.forward_layer_unit_seq = [self.cl_num_in_elements*self.cl_num_in_channel]
+        for r in intermidiate_layers:
+            ne = int(self.forward_layer_unit_seq[0] * r)
+            self.forward_layer_unit_seq.append(ne)
+        self.forward_layer_unit_seq.append(self.n_clasfy_ray)
 
-        def __call__(self, state):
-            '''
-            強化学習用のQ関数ではないので、普通にlossを返す
-            '''
-            return self.fwd_loss(state)[1]
+        self.fwd_links = []
+        self.rev_links = []
 
-    saved_attributes = ("model1", "model2", "model3")
+        i = 0
+        for ie, oe in zip(self.forward_layer_unit_seq, self.forward_layer_unit_seq[1:]):
+            nfl = L.Linear(ie, oe)
+            nrl = L.Linear(oe, ie)
+            self.fwd_links.append(nfl)
+            self.rev_links.append(nrl)
+            print('Layer {} {}: in: element {}, out: {}'.format(name, i, ie, oe))
+            i += 1
+        
 
     def __init__(self, num_ray, n_clasfy_ray):
 
@@ -217,7 +166,7 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
         slide_size_2nd = 1
         self.pooling_size_2nd = 4
         
-        self.model1 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Ray(
+        self.gen_conv_link(
                 num_ray,
                 num_in_channel=self.in_channel_1st,
                 out_channel=out_channel_1st,
@@ -225,68 +174,67 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
                 slide_size=slide_size_1st,
                 pooling_size=self.pooling_size_1st,
                 name="1st conv",
-                dropout_rate=0.2)
-        self.model2 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Ray(
-                self.model1.num_of_pooling_out_elements,
-                num_in_channel=out_channel_1st,
-                out_channel=out_channel_2nd,
-                filter_size=filter_size_2nd,
-                slide_size=slide_size_2nd,
-                pooling_size=self.pooling_size_2nd,
-                name="2nd conv",
-                dropout_rate=0.5)
+                dropout_rate=0.0)
 
-        self.model3 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Clasfy(
-                self.model2.num_of_pooling_out_elements,
-                out_channel_2nd,
+        self.gen_clasify_link(
+#                self.model1.num_of_pooling_out_elements,
+                self.num_of_conv_out_elements,
+                out_channel_1st,
                 self.n_clasfy_ray,
+                [0.7, 0.5, 0.3, 0.1],
                 name="Clasify")
 
-        self.model_list = [self.model1, self.model2, self.model3]
-        
         self.debug_info = None
-        
+
+        super().__init__()
+        self.add_link(self.conv)
+        self.add_link(self.dcnv)
+        for fl, rl in zip(self.fwd_links, self.rev_links):
+            self.add_link(fl)
+            self.add_link(rl)
+
+
     def fwd(self, x):
-        h1 = F.max_pooling_nd(self.model1.fwd(x), self.pooling_size_1st)
-        h2 = F.max_pooling_nd(self.model2.fwd(h1),self.pooling_size_2nd)
-        h3 = self.model3.fwd(h2)
+        if self.dropout_rate == 0.0:
+            h1 = F.relu(self.conv(x))
+        else:
+            h1 = F.dropout(F.relu(self.conv(x)), ratio=self.dropout_rate)
+
+#        h1 = F.max_pooling_nd(self.model1.fwd(x), self.pooling_size_1st)
+
+        h_inout = h1
+        for l in self.fwd_links:
+            h_inout = F.leaky_relu(l(h_inout))
         
-        return h3
+        return h_inout
 
 
     def __call__(self, x):
         '''
         強化学習用のQ関数ではないので、普通にlossを返す
         '''
-        model1_out = self.model1.fwd_loss(x)
-        h1 = F.max_pooling_nd(model1_out[0], self.pooling_size_1st)
-        model2_out = self.model2.fwd_loss(h1)
-        h2 = F.max_pooling_nd(model2_out[0], self.pooling_size_2nd)
-        model3_out = self.model3.fwd_loss(h2)
-        
-        self.debug_info = (model1_out, model3_out, model3_out)
+        if self.dropout_rate == 0.0:
+            h1 = F.relu(self.conv(x))
+        else:
+            h1 = F.dropout(F.relu(self.conv(x)), ratio=self.dropout_rate)
+        dcnv_out = self.dcnv(h1)
+        loss = F.mean_squared_error(dcnv_out, x)
 
-        return [model1_out[1], model2_out[1], model3_out[1]]
+        self.debug_info = [[h1, loss, dcnv_out, x]]
+
+        h_in = chainer.Variable(h1.array)
+        for fl, rl in zip(self.fwd_links, self.rev_links):
+            h_out = F.leaky_relu(fl(h_in))
+            h_rout = F.reshape(rl(h_out), h_in.shape)
+            ls = F.mean_squared_error(h_rout, h_in)
+            loss = loss + ls
+
+            self.debug_info.append([h_out, ls, h_rout, h_in])   # デバッグ用に処理過程の情報を残す
+
+            h_in = chainer.Variable(h_out.array)    # 後段の層からの逆伝搬が伝わらないように、次の層の入力データを改めて生成する
+
+        return loss
     
-    def cleargrads(self):
-        for m in self.model_list:
-            m.cleargrads()
-                
-    def gen_setup_optimizer(self, opt_type):
-        '''
-        内部で抱えるそれぞれのモデルに対するそれぞれのOptimizerを生成する
-        
-        return:
-            opt_type: chainer.optimizers.XXX
-        '''
-        ans = []
-        assert issubclass(opt_type,chainer.Optimizer)
-        for m in self.model_list:
-            optimizer = opt_type()
-            optimizer.setup(m)
-            ans.append(optimizer)
-        
-        return ans
 
 class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.AttributeSavingMixin):
     """行動価値関数 = Q関数
@@ -548,13 +496,15 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         gamma = 0.99
         alpha = 0.5
         
-        n_clasfy_ray = 32
+        n_clasfy_ray = 12
 
 #        self.q_func = Qfunc_FC_TWN2_Vision(env.obs_size_list[0], env.obs_size_list[1], env.obs_size_list[2], env.action_space.n)
         self.cnn_ae = Qfunc_FC_TWN2_Vision(self.num_ray, n_clasfy_ray)
-        self.cnn_ae_opts = self.cnn_ae.gen_setup_optimizer(chainer.optimizers.Adam)
-        self.replay_buffer_cnn_ae = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
-        self.cnn_ae_last_losses = None
+        self.cnn_ae_opt = chainer.optimizers.Adam()
+        self.cnn_ae_opt.setup(self.cnn_ae)
+#        self.replay_buffer_cnn_ae = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
+        self.replay_buffer_cnn_ae = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
+        self.cnn_ae_last_loss = None
 
         self.hist_ana_ae = Qfunc_FC_TWN2_History(self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status, self.history_num, self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status)
         self.hist_ana_ae_opts = self.hist_ana_ae.gen_setup_optimizer(chainer.optimizers.Adam)
@@ -644,17 +594,15 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
             opt.update()
 
 
-
     def update_cnn_ae(self):
         sample_obs = self.replay_buffer_cnn_ae.sample(self.minibatch_size)
         obs_np = np.array([elem['state'] for elem in sample_obs])
         
         self.cnn_ae.cleargrads()
-        self.cnn_ae_last_losses = self.cnn_ae(obs_np)
-        for loss in self.cnn_ae_last_losses:
-            loss.backward()
-        for opt in self.cnn_ae_opts:
-            opt.update()
+        self.cnn_ae_last_loss = self.cnn_ae(obs_np)
+        self.cnn_ae_last_loss.backward()
+        self.cnn_ae_opt.update()
+
 
     def pre_layer_output(self, obs):
         twn_status, x, eb_status = self.obs_split_twn(obs)
@@ -751,7 +699,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         Returns:
             None
         """
-        self.cnn_ae.save(os.path.join(dirname, 'cnn_ae'))
+        chainer.serializers.save_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
 #        i = 0
 #        for opt in self.cnn_ae_opts:
 #            opt.save(os.path.join(dirname, 'cnn_ae_opts', '{}'.format(i)))
@@ -765,7 +713,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         Returns:
             None
         """
-        self.cnn_ae.load(os.path.join(dirname, 'cnn_ae'))
+        chainer.serializers.load_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
 #        i = 0
 #        for opt in self.cnn_ae_opts:
 #            opt.load(os.path.join(dirname, 'cnn_ae_opts', '{}'.format(i)))
@@ -797,7 +745,10 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         stat_strings = []
         for t in stat:
             stat_strings.append('({}:{: >7.2f})'.format(t[0], t[1]))
-        stat_strings.append('(explorer rate({: >6}): {:>7.3%})'.format(self.agent.t, self.explorer.compute_epsilon(self.agent.t) ) )
+        if hasattr(self.explorer, 'compute_epsilon'):
+            stat_strings.append('(explorer rate({: >6}): {:>7.3%})'.format(self.agent.t, self.explorer.compute_epsilon(self.agent.t) ) )
+        else:
+            stat_strings.append('(explorer rate({: >6}): XX.X)'.format(self.agent.t) )
 
         ans = ','.join(stat_strings)
 

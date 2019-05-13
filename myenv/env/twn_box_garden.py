@@ -242,14 +242,19 @@ class my_car_obj(bg_obj.circle_object):
                             if len(self.attrs[4]) >= 6:
                                 if len(self.clasify_in.y) != len(self.attrs[4][4].data):
                                     self.clasify_in.clear()
-                                    self.clasify_dcnv.clear()
                                     for i in range(len(self.attrs[4][4].data)):
-                                        self.clasify_in.append( i*22*64/len(self.attrs[4][4].data), self.attrs[4][4].data[i] )
-                                        self.clasify_dcnv.append( i*22*64/len(self.attrs[4][4].data), self.attrs[4][5].data[i] )
+                                        self.clasify_in.append( i*22*64/len(self.attrs[4][4].data), self.attrs[4][4].data[i] + 1.0 )
                                 else:
                                     for i in range(len(self.attrs[4][4].data)):
-                                        self.clasify_in.y[i]   = self.attrs[4][4].data[i]
-                                        self.clasify_dcnv.y[i] = self.attrs[4][5].data[i]
+                                        self.clasify_in.y[i]   = self.attrs[4][4].data[i] + 1.0
+                                
+                                if len(self.clasify_dcnv.y) != len(self.attrs[4][5].data):
+                                    self.clasify_dcnv.clear()
+                                    for i in range(len(self.attrs[4][5].data)):
+                                        self.clasify_dcnv.append( i*22*64/len(self.attrs[4][5].data), self.attrs[4][5].data[i] - 1.0 )
+                                else:
+                                    for i in range(len(self.attrs[4][5].data)):
+                                        self.clasify_dcnv.y[i] = self.attrs[4][5].data[i] - 1.0
 
                                 if len(self.clasify_out.y) != len(self.attrs[4][3].data):
                                     self.clasify_out.clear()
@@ -356,7 +361,7 @@ class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
         self.scn.subplot_list[3].ax.set_ylabel('Q value')
 
         self.scn.subplot_list[8].ax.set_xlim(0, 22*64)
-        self.scn.subplot_list[8].ax.set_ylim(-2.0, 2.0)
+        self.scn.subplot_list[8].ax.set_ylim(-3.0, 3.0)
         self.scn.subplot_list[8].ax.set_xlabel('clasify index')
         self.scn.subplot_list[8].ax.set_ylabel('clasify output')
 
