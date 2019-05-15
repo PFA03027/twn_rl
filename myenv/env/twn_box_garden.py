@@ -251,10 +251,10 @@ class my_car_obj(bg_obj.circle_object):
                                 if len(self.clasify_dcnv.y) != len(self.attrs[4][5].data):
                                     self.clasify_dcnv.clear()
                                     for i in range(len(self.attrs[4][5].data)):
-                                        self.clasify_dcnv.append( i*22*64/len(self.attrs[4][5].data), self.attrs[4][5].data[i] - 1.0 )
+                                        self.clasify_dcnv.append( i*22*64/len(self.attrs[4][5].data), self.attrs[4][5].data[i] )
                                 else:
                                     for i in range(len(self.attrs[4][5].data)):
-                                        self.clasify_dcnv.y[i] = self.attrs[4][5].data[i] - 1.0
+                                        self.clasify_dcnv.y[i] = self.attrs[4][5].data[i]
 
                                 if len(self.clasify_out.y) != len(self.attrs[4][3].data):
                                     self.clasify_out.clear()

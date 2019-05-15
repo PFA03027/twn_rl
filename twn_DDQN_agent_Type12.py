@@ -502,8 +502,8 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         self.cnn_ae = Qfunc_FC_TWN2_Vision(self.num_ray, n_clasfy_ray)
         self.cnn_ae_opt = chainer.optimizers.Adam()
         self.cnn_ae_opt.setup(self.cnn_ae)
-#        self.replay_buffer_cnn_ae = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
-        self.replay_buffer_cnn_ae = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
+        self.replay_buffer_cnn_ae = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
+#        self.replay_buffer_cnn_ae = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
         self.cnn_ae_last_loss = None
 
         self.hist_ana_ae = Qfunc_FC_TWN2_History(self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status, self.history_num, self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status)
