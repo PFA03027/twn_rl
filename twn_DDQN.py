@@ -189,9 +189,9 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
                         tmp_add_info.extend(
                             [agent.cnn_ae.debug_info[0][3][0,:,:].reshape(-1),
                              agent.cnn_ae.debug_info[0][2][0,:,:].reshape(-1),
-                             agent.cnn_ae.debug_info[5][0].data[0,:].reshape(-1),
-                             agent.cnn_ae.debug_info[4][0][0,:].reshape(-1),
-                             agent.cnn_ae.debug_info[5][2].data[0,:].reshape(-1),
+                             agent.cnn_ae.debug_info[-1][0].data[0,:].reshape(-1),
+                             agent.cnn_ae.debug_info[-2][0][0,:].reshape(-1),
+                             agent.cnn_ae.debug_info[-1][2].data[0,:].reshape(-1),
                              ])
 
                 env.render(add_info=tmp_add_info)
@@ -277,9 +277,9 @@ def func_demo(args, mq, env_name, func_agent_generation):
                             tmp_add_info.extend(
                                 [agent.cnn_ae.debug_info[0][3][0,:,:].reshape(-1),
                                 agent.cnn_ae.debug_info[0][2][0,:,:].reshape(-1),
-                                agent.cnn_ae.debug_info[6][0].data[0,:].reshape(-1),
-                                agent.cnn_ae.debug_info[5][0][0,:,:].reshape(-1),
-                                agent.cnn_ae.debug_info[6][2].data[0,:].reshape(-1),
+                                agent.cnn_ae.debug_info[1][0].data[0,:,:].reshape(-1),
+                                agent.cnn_ae.debug_info[0][0][0,:,:].reshape(-1),
+                                agent.cnn_ae.debug_info[1][2].data[0,:,:].reshape(-1),
                                 ])
 
                     env.render(add_info=tmp_add_info)
@@ -442,8 +442,8 @@ if __name__ == '__main__':
 #    func_agent_generation = twn_DDQN_agent_Type9.func_agent_generation
 #    func_agent_generation = twn_DDQN_agent_Type2_2.func_agent_generation
 #    func_agent_generation = twn_DDQN_agent_Type10.func_agent_generation
-#    func_agent_generation = twn_DDQN_agent_Type11.func_agent_generation
-    func_agent_generation = twn_DDQN_agent_Type12.func_agent_generation
+    func_agent_generation = twn_DDQN_agent_Type11.func_agent_generation
+#    func_agent_generation = twn_DDQN_agent_Type12.func_agent_generation
    
     if args.demo:
         func_demo(args, None, env_name, func_agent_generation)
