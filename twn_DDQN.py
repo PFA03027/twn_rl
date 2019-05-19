@@ -119,6 +119,8 @@ def training_log_graph(mq, window_title):
                 l.append(msg[0], sr)
 
             scn.update_subplot()
+            scn.fig.tight_layout()
+            
 
         except queue.Empty:
             pass

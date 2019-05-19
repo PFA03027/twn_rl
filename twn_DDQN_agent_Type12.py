@@ -46,77 +46,78 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
         n_clasfy_ray: レーダー情報の分析結果の出力要素数
     """
 
-
-    def calc_num_out_elements1D(self, num_element, in_channel, out_channel, filter_size, slide_size, pooling_size):
-        '''
-        num_element: number of input elements per input channel
-        in_channel: number of input channel
-        out_channel: number of output channel
-        filter_size: filter size of convolution
-        slide_size: slide size of filter
-        pooling_size: pooling size for output
+    class Qfunc_FC_TWN_model_AECNN_for_Ray:
+        """ 
+        AutoEncoder of CNN for ray input
+        レーダーセンサーの入力情報に対する畳み込み層のモデル
+        畳み込み層は、特徴抽出ための層となるので、AutoEncoderの手法を利用して、学習を行う。
+        よって、この層は、強化学習の対象とはならない。
         
-        return of 1st: number of elements of convolution output
-        return of 2nd: number of elements of pooling output
-        '''
-        num_of_conv_out_elements = (num_element - filter_size)//slide_size + 1
-        num_of_pooling_out_elements = num_of_conv_out_elements//pooling_size
-        if (num_of_conv_out_elements%pooling_size) != 0:
-            num_of_pooling_out_elements += 1
-        
-        return num_of_conv_out_elements, num_of_pooling_out_elements
+        """
     
-    def calc_num_out_elementsND(self, num_element, pad_size, in_channel, out_channel, filter_size, slide_size, pooling_size):
-        '''
-        num_element: list type [180, 10]
-        pad_size: list type [1, 1]
-        
-        return: type is np array
-        '''
-        np_num_element = np.array(num_element)
-        np_pad_size = np.array(pad_size)
-        num_of_conv_out_elements = ((np_num_element + np_pad_size) - filter_size)//slide_size + 1
-        num_of_pooling_out_elements = num_of_conv_out_elements//pooling_size
-        num_of_pooling_out_elements[num_of_conv_out_elements%pooling_size != 0] += 1
-        
-        return num_of_conv_out_elements, num_of_pooling_out_elements
-    
-    def gen_conv_link(self, num_in_elements, num_in_channel=1, out_channel=16, filter_size=5, slide_size=1, pooling_size=2, name=None, dropout_rate=0.0):
-        '''
-        num_in_elements: number of input elements per input channel
-        num_in_channel: number of input channel
-        out_channel: number of output channel
-        filter_size: filter size of convolution
-        slide_size: slide size of filter
-        pooling_size: pooling size for output
-        Name: name of this layer
-        dropout_rate: dropout ratio of output layer
-        '''
-
-        self.num_in_elements = num_in_elements
-
-        self.in_channel = num_in_channel
-        self.out_channel = out_channel
-        self.filter_size = filter_size
-        self.slide_size = slide_size
-        self.pooling_size = pooling_size
-        
-        self.dropout_rate = dropout_rate
-
-        self.num_of_conv_out_elements, self.num_of_pooling_out_elements = self.calc_num_out_elements1D(self.num_in_elements, self.in_channel, self.out_channel, self.filter_size, self.slide_size, self.pooling_size)
-
-        print('Layer {}: in: {} drop rate: {:>4.1%} out: conv out {}  pooling out {}'.format(
-            name,
-            self.num_in_elements,
-            self.dropout_rate,
-            self.num_of_conv_out_elements,
-            self.num_of_pooling_out_elements
-            ))
-
-        self.conv = L.ConvolutionND(1, self.in_channel, self.out_channel, ksize=self.filter_size, stride=self.slide_size)
-        self.dcnv = L.DeconvolutionND(1, self.out_channel, self.in_channel, ksize=self.filter_size, stride=self.slide_size)
+        def calc_num_out_elements1D(self, num_element, in_channel, out_channel, filter_size, slide_size, pooling_size):
+            '''
+            num_element: number of input elements per input channel
+            in_channel: number of input channel
+            out_channel: number of output channel
+            filter_size: filter size of convolution
+            slide_size: slide size of filter
+            pooling_size: pooling size for output
             
-    def gen_clasify_link(self, num_in_elements, num_in_channel, n_clasfy_ray, intermidiate_layers=[], name=None):
+            return of 1st: number of elements of convolution output
+            return of 2nd: number of elements of pooling output
+            '''
+            num_of_conv_out_elements = (num_element - filter_size)//slide_size + 1
+            num_of_pooling_out_elements = num_of_conv_out_elements//pooling_size
+            if (num_of_conv_out_elements%pooling_size) != 0:
+                num_of_pooling_out_elements += 1
+            
+            return num_of_conv_out_elements, num_of_pooling_out_elements
+        
+        def calc_num_out_elementsND(self, num_element, pad_size, in_channel, out_channel, filter_size, slide_size, pooling_size):
+            '''
+            num_element: list type [180, 10]
+            pad_size: list type [1, 1]
+            
+            return: type is np array
+            '''
+            np_num_element = np.array(num_element)
+            np_pad_size = np.array(pad_size)
+            num_of_conv_out_elements = ((np_num_element + np_pad_size) - filter_size)//slide_size + 1
+            num_of_pooling_out_elements = num_of_conv_out_elements//pooling_size
+            num_of_pooling_out_elements[num_of_conv_out_elements%pooling_size != 0] += 1
+            
+            return num_of_conv_out_elements, num_of_pooling_out_elements
+        
+        def __init__(self, num_in_elements, num_in_channel=1, out_channel=16, filter_size=5, slide_size=1, pooling_size=2, name=None):
+            '''
+            num_in_elements: number of input elements per input channel
+            num_in_channel: number of input channel
+            out_channel: number of output channel
+            filter_size: filter size of convolution
+            slide_size: slide size of filter
+            pooling_size: pooling size for output
+            Name: name of this layer
+            dropout_rate: dropout ratio of output layer
+            '''
+    
+            self.num_in_elements = num_in_elements
+    
+            self.in_channel = num_in_channel
+            self.out_channel = out_channel
+            self.filter_size = filter_size
+            self.slide_size = slide_size
+            self.pooling_size = pooling_size
+            
+            self.num_of_conv_out_elements, self.num_of_pooling_out_elements = self.calc_num_out_elements1D(self.num_in_elements, self.in_channel, self.out_channel, self.filter_size, self.slide_size, self.pooling_size)
+
+            print('Layer {}: in: {}  out: conv out {}  pooling out {}'.format(name, self.num_in_elements, self.num_of_conv_out_elements, self.num_of_pooling_out_elements))
+
+            self.conv = L.ConvolutionND(1, self.in_channel, self.out_channel, ksize=self.filter_size, stride=self.slide_size)
+            self.dcnv = L.DeconvolutionND(1, self.out_channel, self.in_channel, ksize=self.filter_size, stride=self.slide_size)
+            
+
+    def gen_clasify_link(self, num_in_elements, num_in_channel, n_clasfy_ray, intermidiate_layers=[], dropout_rate=[], name=None):
         '''
         num_in_elements: number of　output elements per output channel of CNN as input
         num_in_channel: number of　output channel of CNN as input
@@ -129,28 +130,33 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
         self.cl_num_in_elements = num_in_elements
         self.cl_num_in_channel = num_in_channel
 
+        self.dropout_rate_list = []
+
         self.n_clasfy_ray = n_clasfy_ray
 
-        self.forward_layer_unit_seq = [self.cl_num_in_elements*self.cl_num_in_channel]
-        for r in intermidiate_layers:
-            ne = int(self.forward_layer_unit_seq[0] * r)
-            self.forward_layer_unit_seq.append(ne)
-        self.forward_layer_unit_seq.append(self.n_clasfy_ray)
-
-        self.fwd_links = []
-        self.rev_links = []
+        forward_layer_unit_seq = [self.cl_num_in_elements*self.cl_num_in_channel]
+        for r, d in zip(intermidiate_layers, dropout_rate):
+            ne = int(forward_layer_unit_seq[0] * (r/(1.0-d)))
+            forward_layer_unit_seq.append(ne)
+            self.dropout_rate_list.append(d)
+        forward_layer_unit_seq.append(self.n_clasfy_ray)
+        self.dropout_rate_list.append(0.0)  # 最終層は、ドロップアウトなし
 
         i = 0
-        for ie, oe in zip(self.forward_layer_unit_seq, self.forward_layer_unit_seq[1:]):
+        for ie, oe, d in zip(forward_layer_unit_seq, forward_layer_unit_seq[1:], self.dropout_rate_list):
             nfl = L.Linear(ie, oe)
             nrl = L.Linear(oe, ie)
             self.fwd_links.append(nfl)
             self.rev_links.append(nrl)
-            print('Layer {} {}: in: element {}, out: {}'.format(name, i, ie, oe))
+            print('Layer {} {}: in: element {}, out: {}/{}'.format(name, i, ie, int(oe*(1.0-d)), oe))
             i += 1
         
 
     def __init__(self, num_ray, n_clasfy_ray):
+        self.conv_dcnv_links = []
+        self.fwd_links = []
+        self.rev_links = []
+
 
         self.num_ray = num_ray
         self.n_clasfy_ray = n_clasfy_ray
@@ -166,45 +172,52 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
         slide_size_2nd = 1
         self.pooling_size_2nd = 4
         
-        self.gen_conv_link(
+        self.conv_dcnv_links.append( Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Ray(
                 num_ray,
                 num_in_channel=self.in_channel_1st,
                 out_channel=out_channel_1st,
                 filter_size=filter_size_1st,
                 slide_size=slide_size_1st,
                 pooling_size=self.pooling_size_1st,
-                name="1st conv",
-                dropout_rate=0.0)
+                name="1st conv") )
+        self.conv_dcnv_links.append( Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Ray(
+                self.conv_dcnv_links[0].num_of_pooling_out_elements,
+                num_in_channel=out_channel_1st,
+                out_channel=out_channel_2nd,
+                filter_size=filter_size_2nd,
+                slide_size=slide_size_2nd,
+                pooling_size=self.pooling_size_2nd,
+                name="2nd conv") )
 
         self.gen_clasify_link(
-#                self.model1.num_of_pooling_out_elements,
-                self.num_of_conv_out_elements,
-                out_channel_1st,
+                self.conv_dcnv_links[1].num_of_pooling_out_elements,
+                out_channel_2nd,
                 self.n_clasfy_ray,
-                [0.7, 0.5, 0.3, 0.1],
+                [],
+                [],
                 name="Clasify")
 
         self.debug_info = None
 
         super().__init__()
-        self.add_link(self.conv)
-        self.add_link(self.dcnv)
+        for cdl in self.conv_dcnv_links:
+            self.add_link(cdl.conv)
+            self.add_link(cdl.dcnv)
         for fl, rl in zip(self.fwd_links, self.rev_links):
             self.add_link(fl)
             self.add_link(rl)
 
 
     def fwd(self, x):
-        if self.dropout_rate == 0.0:
-            h1 = F.relu(self.conv(x))
-        else:
-            h1 = F.dropout(F.relu(self.conv(x)), ratio=self.dropout_rate)
+        h_inout = x
+        for cdl in self.conv_dcnv_links:
+            h_inout = F.relu(cdl.conv(h_inout))
+            h_inout = F.max_pooling_nd(h_inout, cdl.pooling_size)
 
-#        h1 = F.max_pooling_nd(self.model1.fwd(x), self.pooling_size_1st)
-
-        h_inout = h1
-        for l in self.fwd_links:
+        for l, d in zip(self.fwd_links, self.dropout_rate_list):
             h_inout = F.leaky_relu(l(h_inout))
+            if d != 0.0:
+                h_inout = F.dropout(h_inout, d)
         
         return h_inout
 
@@ -213,21 +226,30 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
         '''
         強化学習用のQ関数ではないので、普通にlossを返す
         '''
-        if self.dropout_rate == 0.0:
-            h1 = F.relu(self.conv(x))
-        else:
-            h1 = F.dropout(F.relu(self.conv(x)), ratio=self.dropout_rate)
-        dcnv_out = self.dcnv(h1)
-        loss = F.mean_squared_error(dcnv_out, x)
+        self.debug_info = []
+        loss = None
+        h_in = x
+        for cdl in self.conv_dcnv_links:
+            h_out = F.relu(cdl.conv(h_in))
+            dcnv_out = cdl.dcnv(h_out)
+            ls = F.mean_squared_error(dcnv_out, h_in)
+            if loss is None:
+                loss = ls
+            else:
+                loss = loss + ls                    # 計算グラフ上は、正しいはず。
 
-        self.debug_info = [[h1, loss, dcnv_out, x]]
+            self.debug_info.append([h_out, ls, dcnv_out, h_in])
+            
+            h_in = F.max_pooling_nd(chainer.Variable(h_out.array), cdl.pooling_size)
 
-        h_in = chainer.Variable(h1.array)
-        for fl, rl in zip(self.fwd_links, self.rev_links):
+        for fl, rl, d in zip(self.fwd_links, self.rev_links, self.dropout_rate_list):
             h_out = F.leaky_relu(fl(h_in))
+            #h_out = F.sigmoid(fl(h_in))
+            if d != 0.0:
+                h_out = F.dropout(h_out, d)
             h_rout = F.reshape(rl(h_out), h_in.shape)
             ls = F.mean_squared_error(h_rout, h_in)
-            loss = loss + ls
+            loss = loss + ls                    # 計算グラフ上は、正しいはず。
 
             self.debug_info.append([h_out, ls, h_rout, h_in])   # デバッグ用に処理過程の情報を残す
 
@@ -496,7 +518,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         gamma = 0.99
         alpha = 0.5
         
-        n_clasfy_ray = 12
+        n_clasfy_ray = 32
 
 #        self.q_func = Qfunc_FC_TWN2_Vision(env.obs_size_list[0], env.obs_size_list[1], env.obs_size_list[2], env.action_space.n)
         self.cnn_ae = Qfunc_FC_TWN2_Vision(self.num_ray, n_clasfy_ray)
