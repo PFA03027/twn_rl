@@ -455,6 +455,22 @@ class training_type5(training_base):
             ans += np.array([-9.0,  9.0]).reshape(2,1)
         return ans
 
+class training_type6(training_type5):
+    def check_end_status(self, obs, reward_map, status_get_eb_flag):
+        self.set_end_status(status_get_eb_flag)
+
+    def get_new_eb_pos(self):
+        ans = np.random.uniform(-1.0, 1.0, 2).reshape(2,1)
+        place = random.randrange(4)
+        if place == 0:
+            ans += np.array([ 9.0,  9.0]).reshape(2,1)
+        elif place == 1:
+            ans += np.array([ 9.0, -9.0]).reshape(2,1)
+        elif place == 2:
+            ans += np.array([-9.0, -9.0]).reshape(2,1)
+        else:
+            ans += np.array([-9.0,  9.0]).reshape(2,1)
+        return ans
 
 
 class TWN_BoxGardenEnv(gym.Env):
@@ -578,8 +594,11 @@ class TWN_BoxGardenEnv(gym.Env):
         
         self.reward_scalor = 1.0
         
-        self.trainers = [training_type1(), training_type2(), training_type3(), training_type4(), training_type5()]
+        self.trainers = [training_type1(), training_type2(), training_type3(), training_type4(), training_type5(), training_type6()]
         self.current_trainer = self.trainers[0]
+        self.ob_return = None
+        self.reward_map = None
+        self.eb_in_flag = False
 
     def collision_my_car(self):
         ans = None
@@ -772,10 +791,12 @@ class TWN_BoxGardenEnv(gym.Env):
         reward_map['collision'] = -collision_count
 
         # 十分に近づいたら、距離の情報は報酬にしない。EBを入手するには向きが重要。
+        # ob3_angle = math.atan2( self.ob3[1], self.ob3[0])
+        # ob3_angle *= 180.0/(20.0+160.0*(1.0-self.ob3[2]))
+        # ob3_angle = np.clip(ob3_angle, -math.pi, math.pi)
+        # reward_map['angle'] = math.cos(ob3_angle)
         ob3_angle = math.atan2( self.ob3[1], self.ob3[0])
-        ob3_angle *= 180.0/(20.0+160.0*(1.0-self.ob3[2]))
-        ob3_angle = np.clip(ob3_angle, -math.pi, math.pi)
-        reward_map['angle'] = math.cos(ob3_angle)
+        reward_map['angle'] = (math.cos(ob3_angle) + 1.0) * self.ob3[2] - 2.0
 
         # 報酬を求める
         if eb_flag:  # ご飯にありつけた
@@ -801,17 +822,17 @@ class TWN_BoxGardenEnv(gym.Env):
         self.old_ob2 = self.ob2
         self.old_ob3 = self.ob3
         
-        collision_count, eb_in_flag, col_touch = self.step_next_state(action)
+        collision_count, self.eb_in_flag, col_touch = self.step_next_state(action)
         
         # 観測情報を集める
-        ob_return = self.gather_observation(col_touch)
+        self.ob_return = self.gather_observation(col_touch)
         
         # 報酬情報の収集
-#        reward_map = self.step_calc_reward(collision_count, eb_in_flag)
-        reward_map = self.step_calc_reward2(collision_count, eb_in_flag)
+#        self.reward_map = self.step_calc_reward(collision_count, self.eb_in_flag)
+        self.reward_map = self.step_calc_reward2(collision_count, self.eb_in_flag)
 
         # 終了判定
-        if eb_in_flag:  # ご飯にありつけた
+        if self.eb_in_flag:  # ご飯にありつけた
             done = True         # エピソードを終了する
             success_flag = True
             self.get_eb_count += 1
@@ -822,28 +843,28 @@ class TWN_BoxGardenEnv(gym.Env):
             self.logger.critical("No enagy of TWN !!!!!!!!!!!")
             done = True
 
-        self.obs_hist.append(np.hstack(ob_return))
+        self.obs_hist.append(np.hstack(self.ob_return))
         del self.obs_hist[0]
         
         r_obs = np.hstack(self.obs_hist)
         
-        reward = sum(reward_map.values())*self.reward_scalor
-#        reward = sum(reward_map.values())
-        #self.logger.info( 'reward: {}'.format(reward_map) )
-        #print( 'reward: {}'.format(reward_map) )
+        reward = sum(self.reward_map.values())*self.reward_scalor
+#        reward = sum(self.reward_map.values())
+        #self.logger.info( 'reward: {}'.format(self.reward_map) )
+        #print( 'reward: {}'.format(self.reward_map) )
         
-        if done:
-            self.current_trainer.check_end_status(ob_return, reward_map, eb_in_flag)
-            for tr in self.trainers:
-                self.logger.critical('tr: {}  success rate: {}'.format(tr.__class__.__name__, tr.success_rate))
-
         self.cumulative_value_of_reward = reward + self.cumulative_value_of_reward * 0.99
 #        self.cumulative_value_of_reward += reward
-        return r_obs, reward, done, {'reward_map': reward_map, 'cumulative_reward': self.cumulative_value_of_reward, 'success_flag': success_flag }
+        return r_obs, reward, done, {'reward_map': self.reward_map, 'cumulative_reward': self.cumulative_value_of_reward, 'success_flag': success_flag }
     
+    def finish_training(self):
+        self.current_trainer.check_end_status(self.ob_return, self.reward_map, self.eb_in_flag)
+        for tr in self.trainers:
+            self.logger.critical('tr: {}  success rate: {}'.format(tr.__class__.__name__, tr.success_rate))
+
+
     #def _reset(self):
     def reset(self):
-        self.twn.Reset()
         self.reset_eb_pos()
         self.ob1 = None
         self.ob2 = None
@@ -855,6 +876,9 @@ class TWN_BoxGardenEnv(gym.Env):
         self.cumulative_value_of_reward = 0.0
         #self.get_eb_count = 0
         self.collision_count = 0
+        self.ob_return = None
+        self.reward_map = None
+        self.eb_in_flag = False
 
         self.reset_render()
         
@@ -975,11 +999,17 @@ class TWN_BoxGardenEnv(gym.Env):
         elif self.get_eb_count < 200:
             self.training_step = 3
             self.current_trainer = self.trainers[self.try_count % 4]
-        else:
+        elif self.get_eb_count < 300:
             self.training_step = 4
             self.current_trainer = self.trainers[1+self.try_count % 4]
+        else:
+            self.training_step = 5
+            self.current_trainer = self.trainers[2+self.try_count % 4]
         
-        self.twn.Reset()
+        if isinstance(self.current_trainer, training_type6):
+            self.twn.Reset2()
+        else:
+            self.twn.Reset()
         for collision_retry in range(10):
             new_pos = self.current_trainer.get_new_eb_pos()
             if not self.collision_eb(new_pos):

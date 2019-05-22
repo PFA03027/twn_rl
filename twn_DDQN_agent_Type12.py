@@ -257,6 +257,94 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
 
         return loss
     
+class Qfunc_FC_TWN2_History(chainer.ChainList):
+    """入力情報の履歴からの分析層"""
+
+
+    def gen_clasify_link(self, num_in_elements, n_clasfy, intermidiate_layers=[], dropout_rate=[], name=None):
+        '''
+        num_in_elements: number of　output elements per output channel of CNN as input
+        n_clasfy: number of clasify
+        intermidiate_layers: the list of intermidiate units rasio to the number of input units
+        Name: name of this layer
+        dropout_rate: dropout ratio of output layer. this is experimental purpose.
+        '''
+
+        self.dropout_rate_list = []
+
+        forward_layer_unit_seq = [num_in_elements]
+        for r, d in zip(intermidiate_layers, dropout_rate):
+            ne = int(((forward_layer_unit_seq[0] - n_clasfy) * r + n_clasfy)/(1.0-d))
+            forward_layer_unit_seq.append(ne)
+            self.dropout_rate_list.append(d)
+        forward_layer_unit_seq.append(n_clasfy)
+        self.dropout_rate_list.append(0.0)  # 最終層は、ドロップアウトなし
+
+        i = 0
+        for ie, oe, d in zip(forward_layer_unit_seq, forward_layer_unit_seq[1:], self.dropout_rate_list):
+            nfl = L.Linear(ie, oe)
+            nrl = L.Linear(oe, ie)
+            self.fwd_links.append(nfl)
+            self.rev_links.append(nrl)
+            print('Layer {} {}: in: element {}, out: {}/{}'.format(name, i, ie, int(oe*(1.0-d)), oe))
+            i += 1
+        
+
+    def __init__(self, num_in_elements, history_num, n_clasfy):
+        self.num_in_elements = num_in_elements * history_num
+        self.n_clasfy = n_clasfy
+        self.debug_info = None
+
+        self.fwd_links = []
+        self.rev_links = []
+        self.gen_clasify_link(
+                self.num_in_elements,
+                self.n_clasfy,
+                [0.7, 0.3, 0.1, 0.07, 0.03],
+                [0.0, 0.0, 0.0, 0.0 , 0.0],
+                name="Clasify")
+
+        super().__init__()
+        for fl, rl in zip(self.fwd_links, self.rev_links):
+            self.add_link(fl)
+            self.add_link(rl)
+
+
+    def fwd(self, x):
+        h_inout = x
+        for l, d in zip(self.fwd_links, self.dropout_rate_list):
+            h_inout = F.leaky_relu(l(h_inout))
+            if d != 0.0:
+                h_inout = F.dropout(h_inout, d)
+        
+        return h_inout
+
+
+    def __call__(self, x):
+        '''
+        強化学習用のQ関数ではないので、普通にlossを返す
+        '''
+        self.debug_info = []
+        loss = None
+        h_in = x
+        for fl, rl, d in zip(self.fwd_links, self.rev_links, self.dropout_rate_list):
+            h_out = F.leaky_relu(fl(h_in))
+            #h_out = F.sigmoid(fl(h_in))
+            if d != 0.0:
+                h_out = F.dropout(h_out, d)
+            h_rout = F.reshape(rl(h_out), h_in.shape)
+            ls = F.mean_squared_error(h_rout, h_in)
+            if loss is None:
+                loss = ls
+            else:
+                loss = loss + ls                    # 計算グラフ上は、正しいはず。
+
+            self.debug_info.append([h_out, ls, h_rout, h_in])   # デバッグ用に処理過程の情報を残す
+
+            h_in = chainer.Variable(h_out.array)    # 後段の層からの逆伝搬が伝わらないように、次の層の入力データを改めて生成する
+
+        return loss
+    
 
 class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.AttributeSavingMixin):
     """行動価値関数 = Q関数
@@ -346,146 +434,6 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
                         )
                 )
 
-class Qfunc_FC_TWN2_History(Qfunc.StateQFunction, agent.AttributeSavingMixin):
-    """入力情報の履歴からの分析層
-
-    Args:
-        num_ray: TWNセンサーでとらえた周囲の状況を表すレーダーの本数
-        n_clasfy_ray: レーダー情報の分析結果の出力要素数
-    """
-    class Qfunc_FC_TWN2_History_AE(chainer.Chain):
-        """ 
-        入力情報の履歴に分析用全結合層
-        特徴抽出ための層となるので、AutoEncoderの手法を利用して、学習を行う。
-        よって、この層は、強化学習の対象とはならない。
-        
-        """
-    
-        def __init__(self, num_in_elements, num_out_elements, name=None):
-            '''
-            num_in_elements: number of input elements as input
-            num_out_elements: number of output elements as output
-            Name: name of this layer
-            '''
-
-            self.num_in_elements = num_in_elements
-            self.num_out_elements = num_out_elements
-            self.layer_name = name
-    
-            super().__init__()
-            with self.init_scope():
-                self.l_in = L.Linear(self.num_in_elements, self.num_out_elements)   # 次元削減層
-                self.l_out = L.Linear(self.num_out_elements, self.num_in_elements)  # 次元復元層
-            
-            print('Layer {}: in: {}, out: {}'.format(name, self.num_in_elements, self.num_out_elements))
-            
-        def fwd(self, state):
-            h1 = F.leaky_relu(self.l_in(state))
-
-            return h1
-
-        def fwd_loss(self, state):
-            h1 = self.fwd(state)
-            dcnv_out = F.reshape(self.l_out(h1), state.shape)
-            loss = F.mean_squared_error(dcnv_out, state)
-
-            return [h1, loss, dcnv_out, state]
-
-        def __call__(self, state):
-            '''
-            強化学習用のQ関数ではないので、普通にlossを返す
-            '''
-            return self.fwd_loss(state)[1]
-
-    saved_attributes = ("model1", "model2", "model3", "model4", "model5", "model6")
-
-    def __init__(self, num_input, history_num, num_output):
-        self.num_input = num_input
-        self.history_num = history_num
-        self.num_output = num_output
-
-        self.output_1st = int((self.num_input * self.history_num - self.num_output) * 0.7 + self.num_output)
-        self.output_2nd = int((self.num_input * self.history_num - self.num_output) * 0.3 + self.num_output)
-        self.output_3rd = int((self.num_input * self.history_num - self.num_output) * 0.1 + self.num_output)
-        self.output_4th = int((self.num_input * self.history_num - self.num_output) * 0.07 + self.num_output)
-        self.output_5th = int((self.num_input * self.history_num - self.num_output) * 0.03 + self.num_output)
-
-        self.model1 = Qfunc_FC_TWN2_History.Qfunc_FC_TWN2_History_AE(
-            self.num_input * self.history_num,
-            self.output_1st,
-            name="1st history analysis")
-        self.model2 = Qfunc_FC_TWN2_History.Qfunc_FC_TWN2_History_AE(
-            self.output_1st,
-            self.output_2nd,
-            name="2nd history analysis")
-        self.model3 = Qfunc_FC_TWN2_History.Qfunc_FC_TWN2_History_AE(
-            self.output_2nd,
-            self.output_3rd,
-            name="3rd history analysis")
-        self.model4 = Qfunc_FC_TWN2_History.Qfunc_FC_TWN2_History_AE(
-            self.output_3rd,
-            self.output_4th,
-            name="4th history analysis")
-        self.model5 = Qfunc_FC_TWN2_History.Qfunc_FC_TWN2_History_AE(
-            self.output_4th,
-            self.output_5th,
-            name="5th history analysis")
-        self.model6 = Qfunc_FC_TWN2_History.Qfunc_FC_TWN2_History_AE(
-            self.output_5th,
-            self.num_output,
-            name="6th history analysis")
-
-        self.model_list = [self.model1, self.model2, self.model3, self.model4, self.model5, self.model6]
-        
-        self.debug_info = None
-
-        
-    def fwd(self, x):
-        h1 = self.model1.fwd(x)
-        h2 = self.model2.fwd(h1)
-        h3 = self.model3.fwd(h2)
-        h4 = self.model4.fwd(h3)
-        h5 = self.model5.fwd(h4)
-        h6 = self.model6.fwd(h5)
-        
-        return h6
-
-
-    def __call__(self, x):
-        '''
-        強化学習用のQ関数ではないので、普通にlossを返す
-        '''
-        model1_out = self.model1.fwd_loss(x)
-        model2_out = self.model2.fwd_loss(model1_out[0])
-        model3_out = self.model3.fwd_loss(model2_out[0])
-        model4_out = self.model4.fwd_loss(model3_out[0])
-        model5_out = self.model5.fwd_loss(model4_out[0])
-        model6_out = self.model6.fwd_loss(model5_out[0])
-        
-        self.debug_info = (model1_out, model2_out, model3_out, model4_out, model5_out, model6_out)
-
-        return [model1_out[1], model2_out[1], model3_out[1], model4_out[1], model5_out[1], model6_out[1]]
-    
-    def cleargrads(self):
-        for m in self.model_list:
-            m.cleargrads()
-                
-    def gen_setup_optimizer(self, opt_type):
-        '''
-        内部で抱えるそれぞれのモデルに対するそれぞれのOptimizerを生成する
-        
-        return:
-            opt_type: chainer.optimizers.XXX
-        '''
-        ans = []
-        assert issubclass(opt_type,chainer.Optimizer)
-        for m in self.model_list:
-            optimizer = opt_type()
-            optimizer.setup(m)
-            ans.append(optimizer)
-        
-        return ans
-
 
 class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAgentMixin):
     """エージェント本体
@@ -529,9 +477,9 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         self.cnn_ae_last_loss = None
 
         self.hist_ana_ae = Qfunc_FC_TWN2_History(self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status, self.history_num, self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status)
-        self.hist_ana_ae_opts = self.hist_ana_ae.gen_setup_optimizer(chainer.optimizers.Adam)
+        self.hist_ana_ae_opt = chainer.optimizers.Adam()
+        self.hist_ana_ae_opt.setup(self.hist_ana_ae)
         self.replay_buffer_hist_ana_ae = chainerrl.replay_buffer.ReplayBuffer(capacity=5000)
-        self.hist_ana_ae_last_losses = None
         self.hist_ana_ae_last_out = None
 
         self.q_func = Qfunc_FC_TWN_RL((self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status)*2, env.action_space.n)
@@ -598,7 +546,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
     def clear_history_data(self):
         self.history_append_count = 0
         self.history_data = []
-        self.hist_ana_ae_last_losses = None
+        self.hist_ana_ae_last_loss = None
         self.hist_ana_ae_last_out = None
 
     def update_hist_ana_ae(self):
@@ -609,11 +557,9 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         obs_np = np.array([elem['state'] for elem in sample_obs])
         
         self.hist_ana_ae.cleargrads()
-        self.hist_ana_ae_last_losses = self.hist_ana_ae(obs_np)
-        for loss in self.hist_ana_ae_last_losses:
-            loss.backward()
-        for opt in self.hist_ana_ae_opts:
-            opt.update()
+        self.hist_ana_ae_last_loss = self.hist_ana_ae(obs_np)
+        self.hist_ana_ae_last_loss.backward()
+        self.hist_ana_ae_opt.update()
 
 
     def update_cnn_ae(self):
@@ -649,6 +595,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         
         return ans
 
+
     def act_and_train(self, obs, reward):
         """Select an action for training.
 
@@ -669,6 +616,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
                 self.update_hist_ana_ae()
         
         return action
+
 
     def act(self, obs):
         """Select an action for evaluation.
@@ -752,11 +700,12 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
 
             Example: [('average_loss': 0), ('average_value': 1), ...]
         """
-        if self.hist_ana_ae.debug_info is not None:
-            ans = [(m.layer_name, di[1].data) for m, di in zip(self.hist_ana_ae.model_list, self.hist_ana_ae.debug_info)]
-            #print(ans)
-        else:
-            ans = []
+        ans = []
+        # if self.hist_ana_ae.debug_info is not None:
+        #     ans = [di[1] for di in self.hist_ana_ae.debug_info]
+        #     #print(ans)
+        # else:
+        #     ans = []
 #        if self.last_losses is not None:
 #            ans.extend([('cnn1_loss', self.last_losses[0].data), ('cnn2_loss', self.last_losses[1].data), ('clasify_loss', self.last_losses[2].data)])
         ans.extend(self.agent.get_statistics())
@@ -765,8 +714,10 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
     def get_statistics_formated_string(self):
         stat = self.get_statistics()
         stat_strings = []
-        for t in stat:
-            stat_strings.append('({}:{: >7.2f})'.format(t[0], t[1]))
+        # count = 1
+        # for t in stat:
+        #     stat_strings.append('({} layer:{: >7.2f})'.format(count, t[1]))
+        #     count += 1
         if hasattr(self.explorer, 'compute_epsilon'):
             stat_strings.append('(explorer rate({: >6}): {:>7.3%})'.format(self.agent.t, self.explorer.compute_epsilon(self.agent.t) ) )
         else:

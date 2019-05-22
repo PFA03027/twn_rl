@@ -215,6 +215,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
         else:
             final_step = max_number_of_steps
 
+        env.finish_training()
         agent.stop_episode_and_train(observation, reward, done=True)
         stat = agent.get_statistics()
         logger.info('episode: {}  R: {}  statistics [(average_q: {}), (average_loss: {})]'.format(episode, R, stat[0][1], stat[1][1]))
@@ -299,6 +300,8 @@ def func_demo(args, mq, env_name, func_agent_generation):
 
                 if done:
                     break
+
+            env.finish_training()
             agent.stop_episode()
             stat = agent.get_statistics()
             logger.info('episode:{:>3} R:{: >7.1f}  Enagy:{: 4.1f}, statistics[{}]'.format(
@@ -353,6 +356,8 @@ def func_demo(args, mq, env_name, func_agent_generation):
                 
                             if done:
                                 break
+
+                        env.finish_training()
                         agent.stop_episode()
                         stat = agent.get_statistics()
                         logger.info('episode:{:>3} R:{: >7.1f}  Enagy:{: 4.1f}, statistics[{}]'.format(
@@ -444,8 +449,8 @@ if __name__ == '__main__':
 #    func_agent_generation = twn_DDQN_agent_Type9.func_agent_generation
 #    func_agent_generation = twn_DDQN_agent_Type2_2.func_agent_generation
 #    func_agent_generation = twn_DDQN_agent_Type10.func_agent_generation
-    func_agent_generation = twn_DDQN_agent_Type11.func_agent_generation
-#    func_agent_generation = twn_DDQN_agent_Type12.func_agent_generation
+#    func_agent_generation = twn_DDQN_agent_Type11.func_agent_generation
+    func_agent_generation = twn_DDQN_agent_Type12.func_agent_generation
    
     if args.demo:
         func_demo(args, None, env_name, func_agent_generation)
