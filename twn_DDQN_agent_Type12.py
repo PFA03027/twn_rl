@@ -442,7 +442,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         num_ray: TWNセンサーでとらえた周囲の状況を表すレーダーの本数
         n_clasfy_ray: レーダー情報の分析結果の出力要素数
     """
-    saved_attributes = ['cnn_ae', 'q_func', 'q_func_opt', 'hist_ana_ae']
+    saved_attributes = ('agent', 'cnn_ae', 'cnn_ae_opt', 'hist_ana_ae', 'hist_ana_ae_opt')
 
     def __init__(self, args, env, load_flag=False, explor_rate=None):
         super().__init__()
@@ -664,31 +664,40 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
 
 
     def save(self, dirname):
-        """Save internal states.
-
-        Returns:
-            None
-        """
-        chainer.serializers.save_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
-#        i = 0
-#        for opt in self.cnn_ae_opts:
-#            opt.save(os.path.join(dirname, 'cnn_ae_opts', '{}'.format(i)))
-#            i += 1
-        self.agent.save(os.path.join(dirname, 'agent'))
-
+         agent.AttributeSavingMixin.save(self, dirname)
 
     def load(self, dirname):
-        """Load internal states.
+         agent.AttributeSavingMixin.load(self, dirname)
 
-        Returns:
-            None
-        """
-        chainer.serializers.load_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
-#        i = 0
-#        for opt in self.cnn_ae_opts:
-#            opt.load(os.path.join(dirname, 'cnn_ae_opts', '{}'.format(i)))
-#            i += 1
-        self.agent.load(os.path.join(dirname, 'agent'))
+#     def save(self, dirname):
+#         """Save internal states.
+
+#         Returns:
+#             None
+#         """
+#         self.agent.save(os.path.join(dirname, 'agent'))     # ここで出力ディレクトリも作ってくれる
+#         chainer.serializers.save_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
+#         chainer.serializers.save_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
+#         chainer.serializers.save_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
+#         chainer.serializers.save_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
+# #        i = 0
+# #        for opt in self.cnn_ae_opts:
+# #            opt.save(os.path.join(dirname, 'cnn_ae_opts', '{}'.format(i)))
+# #            i += 1
+
+
+#     def load(self, dirname):
+#         """Load internal states.
+
+#         Returns:
+#             None
+#         """
+#         self.agent.load(os.path.join(dirname, 'agent'))
+#         chainer.serializers.load_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
+# #        i = 0
+# #        for opt in self.cnn_ae_opts:
+# #            opt.load(os.path.join(dirname, 'cnn_ae_opts', '{}'.format(i)))
+# #            i += 1
 
     def get_statistics(self):
         """Get statistics of the agent.
