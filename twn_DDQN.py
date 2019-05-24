@@ -170,7 +170,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
         final_step = 0
         for t in range(max_number_of_steps):  #1試行のループ
             if isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN):
-                agent.set_success_rate(env.get_current_trainer().success_rate)
+                agent.set_success_rate(env.get_current_trainer().recent_success_rate)
             action = agent.act_and_train(observation, reward)
             reward = 0
             observation, reward, done, info = env.step(action)

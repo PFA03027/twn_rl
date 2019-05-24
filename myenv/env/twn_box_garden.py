@@ -373,22 +373,40 @@ class training_base:
     def __init__(self):
         self.success_count = 0
         self.try_count = 0
+
+        self.max_sccess_history = 10
+        self.success_history = []
     
     def set_end_status(self, success_fail):
         ''' If success_fail is True, success_count is increased. '''
         self.try_count += 1
         if success_fail:
             self.success_count += 1
+            self.success_history.append(1)
+        else:
+            self.success_history.append(0)
+        if len(self.success_history) > self.max_sccess_history:
+            self.success_history.pop(0)
         
         print('try: {} - success {}'.format(self.try_count,self.success_count))
     
     @property
     def success_rate(self):
         """現在の成功率を返す。読み取り専用とするため、setterは定義しない"""
-        if self.try_count == 0:
-            return 0.0
-        else:
-            return self.success_count/self.try_count
+        ans = 0.0
+        if self.try_count > 0:
+            ans = self.success_count/self.try_count
+        
+        return ans
+
+    @property
+    def recent_success_rate(self):
+        """現在の成功率を返す。読み取り専用とするため、setterは定義しない"""
+        ans = 0.0
+        if len(self.success_history) > 0:
+            ans = sum(self.success_history) / len(self.success_history)
+        
+        return ans
 
     def check_end_status(self, obs, reward_map, status_get_eb_flag):
         raise NotImplementedError()
@@ -791,11 +809,11 @@ class TWN_BoxGardenEnv(gym.Env):
         reward_map['collision'] = -collision_count
 
         # 十分に近づいたら、距離の情報は報酬にしない。EBを入手するには向きが重要。
-        # ob3_angle = math.atan2( self.ob3[1], self.ob3[0])
-        # ob3_angle *= 180.0/(20.0+160.0*(1.0-self.ob3[2]))
-        # ob3_angle = np.clip(ob3_angle, -math.pi, math.pi)
-        # reward_map['angle'] = math.cos(ob3_angle)
         ob3_angle = math.atan2( self.ob3[1], self.ob3[0])
+        ob3_angle *= 180.0/(20.0+160.0*(1.0-self.ob3[2]))
+        ob3_angle = np.clip(ob3_angle, -math.pi, math.pi)
+        # reward_map['angle'] = math.cos(ob3_angle)
+        # ob3_angle = math.atan2( self.ob3[1], self.ob3[0])
         reward_map['angle'] = (math.cos(ob3_angle) + 1.0) * self.ob3[2] - 2.0
 
         # 報酬を求める
@@ -860,7 +878,12 @@ class TWN_BoxGardenEnv(gym.Env):
     def finish_training(self):
         self.current_trainer.check_end_status(self.ob_return, self.reward_map, self.eb_in_flag)
         for tr in self.trainers:
-            self.logger.critical('tr: {}  success rate: {}'.format(tr.__class__.__name__, tr.success_rate))
+            self.logger.critical('tr: {}  success rate: {:>4.0%}  {}/{}  recent rate: {:>4.0%}'.format(
+                tr.__class__.__name__,
+                tr.success_rate,
+                tr.success_count,
+                tr.try_count,
+                tr.recent_success_rate))
 
 
     #def _reset(self):
