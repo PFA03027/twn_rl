@@ -197,7 +197,7 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
                 [],
                 name="Clasify")
 
-        self.debug_info = None
+        self.debug_info = {}
 
         super().__init__()
         for cdl in self.conv_dcnv_links:
@@ -219,6 +219,8 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
             if d != 0.0:
                 h_inout = F.dropout(h_inout, d)
         
+        self.debug_info['clasify_out'] = h_inout.array
+        
         return h_inout
 
 
@@ -226,7 +228,8 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
         '''
         強化学習用のQ関数ではないので、普通にlossを返す
         '''
-        self.debug_info = []
+        self.debug_info['cnn_ae_out'] = []
+        self.debug_info['clasify_ae_out'] = []
         loss = None
         h_in = x
         for cdl in self.conv_dcnv_links:
@@ -238,7 +241,7 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
             else:
                 loss = loss + ls                    # 計算グラフ上は、正しいはず。
 
-            self.debug_info.append([h_out, ls, dcnv_out, h_in])
+            self.debug_info['cnn_ae_out'].append([h_out, ls, dcnv_out, h_in])   # デバッグ用に処理過程の情報を残す
             
             h_in = F.max_pooling_nd(chainer.Variable(h_out.array), cdl.pooling_size)
 
@@ -251,7 +254,7 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
             ls = F.mean_squared_error(h_rout, h_in)
             loss = loss + ls                    # 計算グラフ上は、正しいはず。
 
-            self.debug_info.append([h_out, ls, h_rout, h_in])   # デバッグ用に処理過程の情報を残す
+            self.debug_info['clasify_ae_out'].append([h_out, ls, h_rout, h_in])   # デバッグ用に処理過程の情報を残す
 
             h_in = chainer.Variable(h_out.array)    # 後段の層からの逆伝搬が伝わらないように、次の層の入力データを改めて生成する
 
@@ -293,7 +296,7 @@ class Qfunc_FC_TWN2_History(chainer.ChainList):
     def __init__(self, num_in_elements, history_num, n_clasfy):
         self.num_in_elements = num_in_elements * history_num
         self.n_clasfy = n_clasfy
-        self.debug_info = None
+        self.debug_info = {}
 
         self.fwd_links = []
         self.rev_links = []
@@ -317,6 +320,8 @@ class Qfunc_FC_TWN2_History(chainer.ChainList):
             if d != 0.0:
                 h_inout = F.dropout(h_inout, d)
         
+        self.debug_info['out'] = h_inout.array
+
         return h_inout
 
 
@@ -324,7 +329,7 @@ class Qfunc_FC_TWN2_History(chainer.ChainList):
         '''
         強化学習用のQ関数ではないので、普通にlossを返す
         '''
-        self.debug_info = []
+        self.debug_info['ae_out'] = []
         loss = None
         h_in = x
         for fl, rl, d in zip(self.fwd_links, self.rev_links, self.dropout_rate_list):
@@ -339,7 +344,7 @@ class Qfunc_FC_TWN2_History(chainer.ChainList):
             else:
                 loss = loss + ls                    # 計算グラフ上は、正しいはず。
 
-            self.debug_info.append([h_out, ls, h_rout, h_in])   # デバッグ用に処理過程の情報を残す
+            self.debug_info['ae_out'].append([h_out, ls, h_rout, h_in])   # デバッグ用に処理過程の情報を残す
 
             h_in = chainer.Variable(h_out.array)    # 後段の層からの逆伝搬が伝わらないように、次の層の入力データを改めて生成する
 
@@ -669,35 +674,6 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
     def load(self, dirname):
          agent.AttributeSavingMixin.load(self, dirname)
 
-#     def save(self, dirname):
-#         """Save internal states.
-
-#         Returns:
-#             None
-#         """
-#         self.agent.save(os.path.join(dirname, 'agent'))     # ここで出力ディレクトリも作ってくれる
-#         chainer.serializers.save_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
-#         chainer.serializers.save_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
-#         chainer.serializers.save_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
-#         chainer.serializers.save_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
-# #        i = 0
-# #        for opt in self.cnn_ae_opts:
-# #            opt.save(os.path.join(dirname, 'cnn_ae_opts', '{}'.format(i)))
-# #            i += 1
-
-
-#     def load(self, dirname):
-#         """Load internal states.
-
-#         Returns:
-#             None
-#         """
-#         self.agent.load(os.path.join(dirname, 'agent'))
-#         chainer.serializers.load_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
-# #        i = 0
-# #        for opt in self.cnn_ae_opts:
-# #            opt.load(os.path.join(dirname, 'cnn_ae_opts', '{}'.format(i)))
-# #            i += 1
 
     def get_statistics(self):
         """Get statistics of the agent.
@@ -735,6 +711,10 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         ans = ','.join(stat_strings)
 
         return ans
+
+
+
+
 
 
 def func_agent_generation(args, env, load_flag=False, explor_rate=None, load_name=None):
