@@ -583,7 +583,7 @@ class TWN_BoxGardenEnv(gym.Env):
         self.action_space_type = discrate_action    # True = 離散タイプ
         if self.action_space_type:
             self.logger.info("action Discrete")
-            self.action_space_divide = 2
+            self.action_space_divide = 4
             self.action_space_divide_plus1 = self.action_space_divide + 1
             self.action_space = spaces.Discrete(self.action_space_divide_plus1 * self.action_space_divide_plus1)
             if twn_operation_type == 0:
@@ -906,7 +906,7 @@ class TWN_BoxGardenEnv(gym.Env):
         #self.logger.info( 'reward: {}'.format(self.reward_map) )
         #print( 'reward: {}'.format(self.reward_map) )
         
-        self.cumulative_value_of_reward = reward + self.cumulative_value_of_reward * 0.99
+        self.cumulative_value_of_reward = reward + self.cumulative_value_of_reward * 0.95
 #        self.cumulative_value_of_reward += reward
         return r_obs, reward, done, {'reward_map': self.reward_map, 'cumulative_reward': self.cumulative_value_of_reward, 'success_flag': success_flag }
     

@@ -468,7 +468,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
 
         self.success_rate = 1.0
 
-        gamma = 0.99
+        gamma = 0.95
         alpha = 0.5
         
         n_clasfy_ray = 32
@@ -615,7 +615,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         
         action = self.agent.act_and_train(h3_c, reward)
         
-        if (self.t % self.update_interval) == 0:
+        if (self.t % self.minibatch_size) == 0:
             if self.t > self.replay_start_size:
                 self.update_cnn_ae()
                 self.update_hist_ana_ae()
