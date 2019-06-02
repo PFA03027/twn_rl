@@ -210,6 +210,10 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
                                 'rev': agent.cnn_ae.debug_info['clasify_ae_out'][-1][2].data[0,:].reshape(-1),
                                 'out': agent.cnn_ae.debug_info['clasify_ae_out'][-1][0].data[0,:].reshape(-1)
                                 }
+                        if 'clasify_out' in agent.cnn_ae.debug_info:
+                            tmp_add_info['clasify_out'] = agent.cnn_ae.debug_info['clasify_out'][0,:].reshape(-1)
+
+                    if agent.hist_ana_ae.debug_info is not None:
                         if 'ae_out' in agent.hist_ana_ae.debug_info:
                             tmp_add_info['hist_ae_in'] = {
                                 'in':  agent.hist_ana_ae.debug_info['ae_out'][0][3][0,:].reshape(-1),
@@ -221,6 +225,8 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
                                 'rev': agent.hist_ana_ae.debug_info['ae_out'][-1][2].data[0,:].reshape(-1),
                                 'out': agent.hist_ana_ae.debug_info['ae_out'][-1][0].data[0,:].reshape(-1)
                             }
+                        if 'out' in agent.hist_ana_ae.debug_info:
+                            tmp_add_info['history_clasify_out'] = agent.hist_ana_ae.debug_info['out'][0,:].reshape(-1)
 
                 env.render(add_info=tmp_add_info)
                 logger.info('episode:{:>3} turn:{:>4} EB:{:>3} R:{: >7.1f}  Enagy:{: 6.1f} success rate:{:>4.0%} {:>3}/{:>3}, statistics[{}]'.format(
@@ -327,6 +333,10 @@ def func_demo(args, mq, env_name, func_agent_generation):
                                     'rev': agent.cnn_ae.debug_info['clasify_ae_out'][-1][2].data[0,:].reshape(-1),
                                     'out': agent.cnn_ae.debug_info['clasify_ae_out'][-1][0].data[0,:].reshape(-1)
                                     }
+                            if 'clasify_out' in agent.cnn_ae.debug_info:
+                                tmp_add_info['clasify_out'] = agent.cnn_ae.debug_info['clasify_out'][0,:].reshape(-1)
+
+                        if agent.hist_ana_ae.debug_info is not None:
                             if 'ae_out' in agent.hist_ana_ae.debug_info:
                                 tmp_add_info['hist_ae_in'] = {
                                     'in':  agent.hist_ana_ae.debug_info['ae_out'][0][3][0,:].reshape(-1),
@@ -338,6 +348,8 @@ def func_demo(args, mq, env_name, func_agent_generation):
                                     'rev': agent.hist_ana_ae.debug_info['ae_out'][-1][2].data[0,:].reshape(-1),
                                     'out': agent.hist_ana_ae.debug_info['ae_out'][-1][0].data[0,:].reshape(-1)
                                 }
+                            if 'out' in agent.hist_ana_ae.debug_info:
+                                tmp_add_info['history_clasify_out'] = agent.hist_ana_ae.debug_info['out'][0,:].reshape(-1)
 
                     env.render(add_info=tmp_add_info)
                     logger.info('episode:{:>3} turn:{:>4} EB:{:>3} R:{: >7.1f}  Enagy:{: 4.1f} success rate:{:>4.0%} {:>3}/{:>3}, statistics[{}]'.format(

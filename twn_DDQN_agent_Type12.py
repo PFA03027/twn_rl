@@ -148,7 +148,7 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
             nrl = L.Linear(oe, ie)
             self.fwd_links.append(nfl)
             self.rev_links.append(nrl)
-            print('Layer {} {}: in: element {}, out: {}/{}'.format(name, i, ie, int(oe*(1.0-d)), oe))
+            print('Rader analysis Layer {} {}: in: element {}, out: {}/{}'.format(name, i, ie, int(oe*(1.0-d)), oe))
             i += 1
         
 
@@ -266,7 +266,7 @@ class Qfunc_FC_TWN2_History(chainer.ChainList):
 
     def gen_clasify_link(self, num_in_elements, n_clasfy, intermidiate_layers=[], dropout_rate=[], name=None):
         '''
-        num_in_elements: number of　output elements per output channel of CNN as input
+        num_in_elements: number of input elements
         n_clasfy: number of clasify
         intermidiate_layers: the list of intermidiate units rasio to the number of input units
         Name: name of this layer
@@ -289,7 +289,7 @@ class Qfunc_FC_TWN2_History(chainer.ChainList):
             nrl = L.Linear(oe, ie)
             self.fwd_links.append(nfl)
             self.rev_links.append(nrl)
-            print('Layer {} {}: in: element {}, out: {}/{}'.format(name, i, ie, int(oe*(1.0-d)), oe))
+            print('History analysis Layer {} {}: in: element {}, out: {}/{}'.format(name, i, ie, int(oe*(1.0-d)), oe))
             i += 1
         
 
@@ -473,6 +473,10 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         
         n_clasfy_ray = 32
 
+        self.cnn_ae_output_elements = n_clasfy_ray
+        self.hist_ana_ae_output_elements = (self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status)//3
+        self.rl_layer_input_elements = self.n_size_twn_status + self.n_size_eb_status + self.cnn_ae_output_elements + self.hist_ana_ae_output_elements
+
 #        self.q_func = Qfunc_FC_TWN2_Vision(env.obs_size_list[0], env.obs_size_list[1], env.obs_size_list[2], env.action_space.n)
         self.cnn_ae = Qfunc_FC_TWN2_Vision(self.num_ray, n_clasfy_ray)
         self.cnn_ae_opt = chainer.optimizers.Adam()
@@ -481,13 +485,13 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
 #        self.replay_buffer_cnn_ae = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
         self.cnn_ae_last_loss = None
 
-        self.hist_ana_ae = Qfunc_FC_TWN2_History(self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status, self.history_num, self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status)
+        self.hist_ana_ae = Qfunc_FC_TWN2_History(self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status, self.history_num, self.hist_ana_ae_output_elements)
         self.hist_ana_ae_opt = chainer.optimizers.Adam()
         self.hist_ana_ae_opt.setup(self.hist_ana_ae)
         self.replay_buffer_hist_ana_ae = chainerrl.replay_buffer.ReplayBuffer(capacity=5000)
         self.hist_ana_ae_last_out = None
 
-        self.q_func = Qfunc_FC_TWN_RL((self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status)*2, env.action_space.n)
+        self.q_func = Qfunc_FC_TWN_RL(self.rl_layer_input_elements, env.action_space.n)
         self.q_func_opt = chainer.optimizers.Adam(eps=1e-2)
         self.q_func_opt.setup(self.q_func)
         self.explorer = None

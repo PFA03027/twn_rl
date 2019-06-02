@@ -161,8 +161,14 @@ class my_car_obj(bg_obj.circle_object):
             bg_draw.scn.subplot_list[self.plot_target_idx+5].append_drawobj(self.qval_graph)
 
             # 6番グラフ
+            ax8 = bg_draw.scn.subplot_list[self.plot_target_idx+6].ax
+            self.history_clasify_out = dt2.drawobj_poly(ax8, color='g', linewidth=1.0)
+            bg_draw.scn.subplot_list[self.plot_target_idx+6].append_drawobj(self.history_clasify_out)
 
             # 7番グラフ
+            ax8 = bg_draw.scn.subplot_list[self.plot_target_idx+7].ax
+            self.clasify_out = dt2.drawobj_poly(ax8, color='g', linewidth=1.0)
+            bg_draw.scn.subplot_list[self.plot_target_idx+7].append_drawobj(self.clasify_out)
 
             # 8番グラフ <- 2番グラフ
             ax8 = bg_draw.scn.subplot_list[self.plot_target_idx+8].ax
@@ -174,14 +180,6 @@ class my_car_obj(bg_obj.circle_object):
             bg_draw.scn.subplot_list[self.plot_target_idx+8].append_drawobj(self.line2_b1)
             bg_draw.scn.subplot_list[self.plot_target_idx+8].append_drawobj(self.line2_b2)
 
-            # 9番グラフ <- 8番グラフ
-            ax8 = bg_draw.scn.subplot_list[self.plot_target_idx+9].ax
-            self.clasify_in = dt2.drawobj_poly(ax8, color='b', linewidth=1.0)
-            self.clasify_out = dt2.drawobj_poly(ax8, color='g', linewidth=1.0)
-            self.clasify_dcnv = dt2.drawobj_poly(ax8, color='r', linewidth=1.0)
-            bg_draw.scn.subplot_list[self.plot_target_idx+9].append_drawobj(self.clasify_in)
-            bg_draw.scn.subplot_list[self.plot_target_idx+9].append_drawobj(self.clasify_out)
-            bg_draw.scn.subplot_list[self.plot_target_idx+9].append_drawobj(self.clasify_dcnv)
 
         def process_msg(self, msg, bg_draw):
             '''
@@ -207,9 +205,9 @@ class my_car_obj(bg_obj.circle_object):
                     self.qval_graph.clear()
                     self.qval_graph.append( 0.0, 0.0 )
 
-                    self.clasify_in.clear()
-                    self.clasify_dcnv.clear()
                     self.clasify_out.clear()
+
+                    self.history_clasify_out.clear()
 
                 elif msg.my_car_cmd == my_car_obj.my_car_msg_ID.UPDATE_POS_ATTRS:
                     self.my_do.move = msg.new_pos
@@ -251,8 +249,25 @@ class my_car_obj(bg_obj.circle_object):
                                 for col_idx in range(ncol):
                                     self.qval_graph.append( col_idx, attrs_list['action_qval'][0, col_idx] )
 
-                            # 6番グラフ - ???
+                            # 6番グラフ - history clasify out
+                            if 'history_clasify_out' in attrs_list:
+                                if len(self.history_clasify_out.y) != len(attrs_list['history_clasify_out']):
+                                    self.history_clasify_out.clear()
+                                    for i in range(len(attrs_list['history_clasify_out'])):
+                                        self.history_clasify_out.append( i * 22*64 / len(attrs_list['history_clasify_out']), attrs_list['history_clasify_out'][i] )
+                                else:
+                                    for i in range(len(attrs_list['history_clasify_out'])):
+                                        self.history_clasify_out.y[i]  = attrs_list['history_clasify_out'][i]
+
                             # 7番グラフ - ???
+                            if 'clasify_out' in attrs_list:
+                                if len(self.clasify_out.y) != len(attrs_list['clasify_out']):
+                                    self.clasify_out.clear()
+                                    for i in range(len(attrs_list['clasify_out'])):
+                                        self.clasify_out.append( i * 22*64 / len(attrs_list['clasify_out']), attrs_list['clasify_out'][i] )
+                                else:
+                                    for i in range(len(attrs_list['clasify_out'])):
+                                        self.clasify_out.y[i]  = attrs_list['clasify_out'][i]
 
                             # 8番グラフ - rader aeの学習情報
                             if 'rader_ae' in attrs_list:
@@ -260,35 +275,6 @@ class my_car_obj(bg_obj.circle_object):
                                     self.line2_b1.y[i] = attrs_list['rader_ae']['in'].data[i]
                                     self.line2_b2.y[i] = attrs_list['rader_ae']['rev'].data[i]
                                 
-                            # 9番グラフ - clasify aeの学習情報
-                            if 'clasify_ae' in attrs_list:
-                                if len(self.clasify_in.y) != len(attrs_list['clasify_ae']['in'].data):
-                                    self.clasify_in.clear()
-                                    for i in range(len(attrs_list['clasify_ae']['in'].data)):
-                                        self.clasify_in.append( i*22*64/len(attrs_list['clasify_ae']['in'].data), attrs_list['clasify_ae']['in'].data[i] + 1.0 )
-                                else:
-                                    for i in range(len(attrs_list['clasify_ae']['in'].data)):
-                                        self.clasify_in.y[i]   = attrs_list['clasify_ae']['in'].data[i] + 1.0
-                                
-                                if len(self.clasify_dcnv.y) != len(attrs_list['clasify_ae']['rev'].data):
-                                    self.clasify_dcnv.clear()
-                                    for i in range(len(attrs_list['clasify_ae']['rev'].data)):
-                                        self.clasify_dcnv.append( i*22*64/len(attrs_list['clasify_ae']['rev'].data), attrs_list['clasify_ae']['rev'].data[i] )
-                                else:
-                                    for i in range(len(attrs_list['clasify_ae']['rev'].data)):
-                                        self.clasify_dcnv.y[i] = attrs_list['clasify_ae']['rev'].data[i]
-
-                                if len(self.clasify_out.y) != len(attrs_list['clasify_ae']['out'].data):
-                                    self.clasify_out.clear()
-                                    for i in range(len(attrs_list['clasify_ae']['out'].data)):
-                                        self.clasify_out.append( i * 22*64 / len(attrs_list['clasify_ae']['out'].data), attrs_list['clasify_ae']['out'].data[i] - 1.0 )
-                                else:
-                                    for i in range(len(attrs_list['clasify_ae']['out'].data)):
-                                        self.clasify_out.y[i]  = attrs_list['clasify_ae']['out'].data[i] - 1.0
-
-                            #print("process_msg: self.line2.y[i]: ", self.line2.y[i])
-                    # print("process_msg: self.move: ", self.my_do.move)
-                    # print("process_msg: self.rot_theata: ", self.my_do.rot_theata)
 
         def update_subplot(self, data):
             pass
@@ -337,6 +323,117 @@ class my_car_obj(bg_obj.circle_object):
         return rot_mat.dot(self.ray)
 
 
+class ae_drawobj:
+    
+    def __init__(self, plot_target_idx):
+        self.plot_target_idx = plot_target_idx
+
+    class ae_drawobj_msg_ID(Enum):
+        '''
+        描画用オブジェクトへのメッセージID
+        '''
+        INVALID = -1
+        UPDATE_POS_ATTRS = 2
+
+    class ae_drawobj_msg(BoxGarden_draw.bg_message_base):
+        '''
+        自車オブジェクトの描画用オブジェクトへのメッセージクラスの定義(クラス内クラス定義)
+        '''
+        def __init__(self, target_id):
+            super().__init__(mid=BoxGarden_draw.bg_msg_ID.COMMON, target_id=target_id)
+            self.my_cmd = ae_drawobj.ae_drawobj_msg_ID.INVALID
+            self.attrs = None
+
+        def update_pos_attrs(self, attrs):
+            self.my_cmd = ae_drawobj.ae_drawobj_msg_ID.UPDATE_POS_ATTRS
+            self.attrs = attrs
+            # print("update_pos_attrs: self.new_pos: ", self.new_pos)
+            # print("update_pos_attrs: self.new_rot_theata: ", self.new_rot_theata)
+
+    class ae_draw(BoxGarden_draw.bg_object_draw):
+        '''
+        自車オブジェクトを表す箱庭オブジェクトの描画用オブジェクト(クラス内クラス定義)
+        '''
+        def __init__(self, ptidx=0):
+            '''
+            第1引数  2つの要素を持つnumpyの配列。円の中心の座標
+            第2引数  半径
+            '''
+            super().__init__()
+            self.plot_target_idx = ptidx
+            
+            self.attrs = None
+
+            print("ae_draw.__init__: ID: ", self.id)
+
+        
+        def process_add(self, msg, bg_draw):
+            ax = bg_draw.scn.subplot_list[self.plot_target_idx].ax
+            
+            # 9番グラフ <- 8番グラフ
+            ax8 = bg_draw.scn.subplot_list[self.plot_target_idx].ax
+            self.ae_in = dt2.drawobj_poly(ax8, color='b', linewidth=1.0)
+            self.ae_out = dt2.drawobj_poly(ax8, color='g', linewidth=1.0)
+            self.ae_dcnv = dt2.drawobj_poly(ax8, color='r', linewidth=1.0)
+            bg_draw.scn.subplot_list[self.plot_target_idx].append_drawobj(self.ae_in)
+            bg_draw.scn.subplot_list[self.plot_target_idx].append_drawobj(self.ae_out)
+            bg_draw.scn.subplot_list[self.plot_target_idx].append_drawobj(self.ae_dcnv)
+
+        def process_msg(self, msg, bg_draw):
+            '''
+            メッセージ処理を実行する
+            '''
+            if msg.my_cmd is not None:
+                if msg.my_cmd == ae_drawobj.ae_drawobj_msg_ID.UPDATE_POS_ATTRS:
+                    if len(self.ae_in.y) != len(msg.attrs['in'].data):
+                        self.ae_in.clear()
+                        for i in range(len(msg.attrs['in'].data)):
+                            self.ae_in.append( i*22*64/len(msg.attrs['in'].data), msg.attrs['in'].data[i] + 1.0 )
+                    else:
+                        for i in range(len(msg.attrs['in'].data)):
+                            self.ae_in.y[i]   = msg.attrs['in'].data[i] + 1.0
+                    
+                    if len(self.ae_dcnv.y) != len(msg.attrs['rev'].data):
+                        self.ae_dcnv.clear()
+                        for i in range(len(msg.attrs['rev'].data)):
+                            self.ae_dcnv.append( i*22*64/len(msg.attrs['rev'].data), msg.attrs['rev'].data[i] )
+                    else:
+                        for i in range(len(msg.attrs['rev'].data)):
+                            self.ae_dcnv.y[i] = msg.attrs['rev'].data[i]
+
+                    if len(self.ae_out.y) != len(msg.attrs['out'].data):
+                        self.ae_out.clear()
+                        for i in range(len(msg.attrs['out'].data)):
+                            self.ae_out.append( i * 22*64 / len(msg.attrs['out'].data), msg.attrs['out'].data[i] - 1.0 )
+                    else:
+                        for i in range(len(msg.attrs['out'].data)):
+                            self.ae_out.y[i]  = msg.attrs['out'].data[i] - 1.0
+
+
+        def update_subplot(self, data):
+            pass
+    
+    def send_drawobj(self, bg_draw):
+        '''
+        描画用オブジェクトをBoxGarden_drawに送る
+        '''
+        self.target_bg_draw = bg_draw
+
+        obj = ae_drawobj.ae_draw(ptidx=self.plot_target_idx)
+
+        self.do_id = obj.id     # 相手先のidを保持しておく
+        mes = BoxGarden_draw.bg_message_base()
+        mes.command_ADD(obj)
+        self.target_bg_draw.send_msg(mes)
+
+
+    def update_pos_attrs(self, attrs):
+        mes = ae_drawobj.ae_drawobj_msg(self.do_id)
+        mes.update_pos_attrs(attrs)
+        if self.target_bg_draw is not None:
+            self.target_bg_draw.send_msg(mes)
+
+
 
 class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
     def __init__(self):
@@ -377,16 +474,28 @@ class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
 
         # 4番グラフ
         self.scn.subplot_list[4].ax.set_xlim(0.0, 300.0)
-        self.scn.subplot_list[4].ax.set_ylim(-600.0, 100.0)
+        self.scn.subplot_list[4].ax.set_ylim(-200.0, 100.0)
         self.scn.subplot_list[4].ax.set_xlabel('update count')
         self.scn.subplot_list[4].ax.set_ylabel('cumulative value of reward')
         self.scn.subplot_list[4].post_update_func = reward_screen_post_update
 
         # 5番グラフ
         self.scn.subplot_list[5].ax.set_xlim(0, 25)
-        self.scn.subplot_list[5].ax.set_ylim(-500, 150)
+        self.scn.subplot_list[5].ax.set_ylim(-200, 150)
         self.scn.subplot_list[5].ax.set_xlabel('action index')
         self.scn.subplot_list[5].ax.set_ylabel('Q value')
+
+        # 6番グラフ
+        self.scn.subplot_list[6].ax.set_xlim(0, 22*64)
+        self.scn.subplot_list[6].ax.set_ylim(-3.0, 3.0)
+        self.scn.subplot_list[6].ax.set_xlabel('history clasify index')
+        self.scn.subplot_list[6].ax.set_ylabel('output')
+
+        # 7番グラフ
+        self.scn.subplot_list[7].ax.set_xlim(0, 22*64)
+        self.scn.subplot_list[7].ax.set_ylim(-3.0, 3.0)
+        self.scn.subplot_list[7].ax.set_xlabel('clasify index')
+        self.scn.subplot_list[7].ax.set_ylabel('clasify output')
 
         # 8番グラフ
         self.scn.subplot_list[8].ax.set_xlim(-180, 180)
@@ -399,6 +508,18 @@ class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
         self.scn.subplot_list[9].ax.set_ylim(-3.0, 3.0)
         self.scn.subplot_list[9].ax.set_xlabel('clasify index')
         self.scn.subplot_list[9].ax.set_ylabel('clasify output')
+
+        # 10番グラフ
+        self.scn.subplot_list[10].ax.set_xlim(0, 22*64)
+        self.scn.subplot_list[10].ax.set_ylim(-3.0, 3.0)
+        self.scn.subplot_list[10].ax.set_xlabel('clasify index')
+        self.scn.subplot_list[10].ax.set_ylabel('history clasify in-layer')
+
+        # 11番グラフ
+        self.scn.subplot_list[11].ax.set_xlim(0, 22*64)
+        self.scn.subplot_list[11].ax.set_ylim(-3.0, 3.0)
+        self.scn.subplot_list[11].ax.set_xlabel('clasify index')
+        self.scn.subplot_list[11].ax.set_ylabel('history clasify out-layer')
 
         self.scn.fig.tight_layout()
 
@@ -568,6 +689,10 @@ class TWN_BoxGardenEnv(gym.Env):
         self.delta_t = 0.02    # 20msecで、更新
         self.num_delta_t_per_action = 10
         twn.TwoWheelMover.delta_t = self.delta_t
+
+        self.clasify_ae_out_layer = ae_drawobj(9)
+        self.hist_ae_in_layer = ae_drawobj(10)
+        self.hist_ae_out_layer = ae_drawobj(11)
         
         if renderable:
             self.twn_bg_draw = twn_BoxGarden_draw()
@@ -577,6 +702,10 @@ class TWN_BoxGardenEnv(gym.Env):
             for cy in self.cylinders:
                 cy.send_drawobj(self.twn_bg_draw)
             self.my_car.send_drawobj(self.twn_bg_draw)
+
+            self.clasify_ae_out_layer.send_drawobj(self.twn_bg_draw)
+            self.hist_ae_in_layer.send_drawobj(self.twn_bg_draw)
+            self.hist_ae_out_layer.send_drawobj(self.twn_bg_draw)
         else:
             self.twn_bg_draw = None
         
@@ -962,6 +1091,12 @@ class TWN_BoxGardenEnv(gym.Env):
                 self.my_car.update_pos_attrs(pos=self.twn.pos, rot_theata=self.twn.GetRotTheata(), attrs=[])
             else:
                 self.my_car.update_pos_attrs(pos=self.twn.pos, rot_theata=self.twn.GetRotTheata(), attrs=[self.ob1, self.ob2, self.ob3, self.cumulative_value_of_reward, add_info])
+                if 'clasify_ae' in add_info:
+                    self.clasify_ae_out_layer.update_pos_attrs(add_info['clasify_ae'])
+                if 'hist_ae_in' in add_info:
+                    self.hist_ae_in_layer.update_pos_attrs(add_info['hist_ae_in'])
+                if 'hist_ae_out' in add_info:
+                    self.hist_ae_out_layer.update_pos_attrs(add_info['hist_ae_out'])
 
     #def _seed(self, seed=1):
     def seed(self, seed=1):
