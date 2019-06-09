@@ -115,6 +115,7 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
 
             self.conv = L.ConvolutionND(1, self.in_channel, self.out_channel, ksize=self.filter_size, stride=self.slide_size)
             self.dcnv = L.DeconvolutionND(1, self.out_channel, self.in_channel, ksize=self.filter_size, stride=self.slide_size)
+            # self.bnorm = L.BatchNormalization(self.out_channel)
             
 
     def gen_clasify_link(self, num_in_elements, num_in_channel, n_clasfy_ray, intermidiate_layers=[], dropout_rate=[], name=None):
@@ -146,16 +147,20 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
         for ie, oe, d in zip(forward_layer_unit_seq, forward_layer_unit_seq[1:], self.dropout_rate_list):
             nfl = L.Linear(ie, oe)
             nrl = L.Linear(oe, ie)
+            bn = L.BatchNormalization(oe)
             self.fwd_links.append(nfl)
             self.rev_links.append(nrl)
+            self.bnorm_clasify.append(bn)
             print('Rader analysis Layer {} {}: in: element {}, out: {}/{}'.format(name, i, ie, int(oe*(1.0-d)), oe))
             i += 1
         
 
     def __init__(self, num_ray, n_clasfy_ray):
         self.conv_dcnv_links = []
+        self.bnorm_conv = []
         self.fwd_links = []
         self.rev_links = []
+        self.bnorm_clasify = []
 
 
         self.num_ray = num_ray
@@ -193,8 +198,8 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
                 self.conv_dcnv_links[1].num_of_pooling_out_elements,
                 out_channel_2nd,
                 self.n_clasfy_ray,
-                [],
-                [],
+                [0.5, 0.1],
+                [0.0, 0.0],
                 name="Clasify")
 
         self.debug_info = {}
@@ -203,19 +208,22 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
         for cdl in self.conv_dcnv_links:
             self.add_link(cdl.conv)
             self.add_link(cdl.dcnv)
-        for fl, rl in zip(self.fwd_links, self.rev_links):
+            # self.add_link(cdl.bnorm)
+        for fl, rl, bn in zip(self.fwd_links, self.rev_links, self.bnorm_clasify):
             self.add_link(fl)
             self.add_link(rl)
+            self.add_link(bn)
 
 
     def fwd(self, x):
         h_inout = x
         for cdl in self.conv_dcnv_links:
+            # h_inout = F.relu(cdl.bnorm(cdl.conv(h_inout)))
             h_inout = F.relu(cdl.conv(h_inout))
             h_inout = F.max_pooling_nd(h_inout, cdl.pooling_size)
 
-        for l, d in zip(self.fwd_links, self.dropout_rate_list):
-            h_inout = F.leaky_relu(l(h_inout))
+        for l, d, bn in zip(self.fwd_links, self.dropout_rate_list, self.bnorm_clasify):
+            h_inout = F.leaky_relu(bn(l(h_inout)))
             if d != 0.0:
                 h_inout = F.dropout(h_inout, d)
         
@@ -233,6 +241,7 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
         loss = None
         h_in = x
         for cdl in self.conv_dcnv_links:
+            # h_out = F.relu(cdl.bnorm(cdl.conv(h_in)))
             h_out = F.relu(cdl.conv(h_in))
             dcnv_out = cdl.dcnv(h_out)
             ls = F.mean_squared_error(dcnv_out, h_in)
@@ -245,8 +254,8 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
             
             h_in = F.max_pooling_nd(chainer.Variable(h_out.array), cdl.pooling_size)
 
-        for fl, rl, d in zip(self.fwd_links, self.rev_links, self.dropout_rate_list):
-            h_out = F.leaky_relu(fl(h_in))
+        for fl, rl, d, bn in zip(self.fwd_links, self.rev_links, self.dropout_rate_list, self.bnorm_clasify):
+            h_out = F.leaky_relu(bn(fl(h_in)))
             #h_out = F.sigmoid(fl(h_in))
             if d != 0.0:
                 h_out = F.dropout(h_out, d)
@@ -287,8 +296,10 @@ class Qfunc_FC_TWN2_History(chainer.ChainList):
         for ie, oe, d in zip(forward_layer_unit_seq, forward_layer_unit_seq[1:], self.dropout_rate_list):
             nfl = L.Linear(ie, oe)
             nrl = L.Linear(oe, ie)
+            bn = L.BatchNormalization(oe)
             self.fwd_links.append(nfl)
             self.rev_links.append(nrl)
+            self.bnorm_clasify.append(bn)
             print('History analysis Layer {} {}: in: element {}, out: {}/{}'.format(name, i, ie, int(oe*(1.0-d)), oe))
             i += 1
         
@@ -300,6 +311,7 @@ class Qfunc_FC_TWN2_History(chainer.ChainList):
 
         self.fwd_links = []
         self.rev_links = []
+        self.bnorm_clasify = []
         self.gen_clasify_link(
                 self.num_in_elements,
                 self.n_clasfy,
@@ -308,15 +320,16 @@ class Qfunc_FC_TWN2_History(chainer.ChainList):
                 name="Clasify")
 
         super().__init__()
-        for fl, rl in zip(self.fwd_links, self.rev_links):
+        for fl, rl, bn in zip(self.fwd_links, self.rev_links, self.bnorm_clasify):
             self.add_link(fl)
             self.add_link(rl)
+            self.add_link(bn)
 
 
     def fwd(self, x):
         h_inout = x
-        for l, d in zip(self.fwd_links, self.dropout_rate_list):
-            h_inout = F.leaky_relu(l(h_inout))
+        for l, d, bn in zip(self.fwd_links, self.dropout_rate_list, self.bnorm_clasify):
+            h_inout = F.leaky_relu(bn(l(h_inout)))
             if d != 0.0:
                 h_inout = F.dropout(h_inout, d)
         
@@ -332,8 +345,8 @@ class Qfunc_FC_TWN2_History(chainer.ChainList):
         self.debug_info['ae_out'] = []
         loss = None
         h_in = x
-        for fl, rl, d in zip(self.fwd_links, self.rev_links, self.dropout_rate_list):
-            h_out = F.leaky_relu(fl(h_in))
+        for fl, rl, d, bn in zip(self.fwd_links, self.rev_links, self.dropout_rate_list, self.bnorm_clasify):
+            h_out = F.leaky_relu(bn(fl(h_in)))
             #h_out = F.sigmoid(fl(h_in))
             if d != 0.0:
                 h_out = F.dropout(h_out, d)
@@ -367,7 +380,7 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
         強化学習の対象となる層
         """
         
-        saved_attributes = ('l4','l5','action_chain_list')
+        saved_attributes = ('l4','l5','action_chain_list','bn1','bn2','bn3')
     
         def __init__(self, n_in_elements, n_actions, explor_rate=0.0):
             '''
@@ -384,8 +397,11 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
 
             super().__init__()
             with self.init_scope():
+                self.bn1 = L.BatchNormalization(n_in_elements)
                 self.l4 = links.MLP(n_in_elements, int(n_in_elements*1.2), (n_in_elements*2, int(n_in_elements*1.8), int(n_in_elements*1.5)), nonlinearity=F.leaky_relu)
+                self.bn2 = L.BatchNormalization(int(n_in_elements*1.2))
                 self.l5 = links.MLP(int(n_in_elements*1.2)+4, 4, (n_in_elements, int(n_in_elements*0.8), (n_in_elements*2)//3), nonlinearity=F.leaky_relu)
+                self.bn3 = L.BatchNormalization(4)
                 local_action_links_list = []
                 for i in range(n_actions):
                     action_links = links.MLP(4, 1, (n_in_elements//2,), nonlinearity=F.leaky_relu)
@@ -413,9 +429,9 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
             
             rdata = np.hstack([noise0, noise1, noise2, noise3]).astype(np.float32)
 
-            h4 = self.l4(x)
+            h4 = self.bn2(self.l4(self.bn1(x)))
             h4_c = F.concat([h4, chainer.Variable(rdata)], axis=1)
-            h5 = self.l5(h4_c)
+            h5 = self.bn3(self.l5(h4_c))
             action_Qvalues = []
             for act_mlp in self.action_chain_list:
                 qout = act_mlp(h5)
@@ -468,10 +484,10 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
 
         self.success_rate = 1.0
 
-        gamma = 0.95
+        gamma = 0.985
         alpha = 0.5
         
-        n_clasfy_ray = 32
+        n_clasfy_ray = 16
 
         self.cnn_ae_output_elements = n_clasfy_ray
         self.hist_ana_ae_output_elements = (self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status)//3
@@ -492,7 +508,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         self.hist_ana_ae_last_out = None
 
         self.q_func = Qfunc_FC_TWN_RL(self.rl_layer_input_elements, env.action_space.n)
-        self.q_func_opt = chainer.optimizers.Adam(eps=1e-2)
+        self.q_func_opt = chainer.optimizers.Adam(eps=1e-3)
         self.q_func_opt.setup(self.q_func)
         self.explorer = None
         if load_flag:

@@ -27,8 +27,8 @@ class TwoWheelMover():
         self.enagy = TwoWheelMover.max_enagy
         self.velocity = np.zeros((2), dtype=np.float32).reshape(2,1)
 
-    def Reset(self):
-        self.pos = np.zeros((2), dtype=np.float32).reshape(2,1)
+    def Reset(self, new_pos=np.zeros((2), dtype=np.float32).reshape(2,1)):
+        self.pos = new_pos.reshape(2,1)
         self.direction = np.array([0.0, 1.0], dtype=np.float32).reshape(2,1)
         self.wheel_vec = np.zeros((2), dtype=np.float32)
         self.wheel_acc = np.zeros((2), dtype=np.float32)

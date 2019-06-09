@@ -474,14 +474,14 @@ class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
 
         # 4番グラフ
         self.scn.subplot_list[4].ax.set_xlim(0.0, 300.0)
-        self.scn.subplot_list[4].ax.set_ylim(-200.0, 100.0)
+        self.scn.subplot_list[4].ax.set_ylim(-400.0, 100.0)
         self.scn.subplot_list[4].ax.set_xlabel('update count')
         self.scn.subplot_list[4].ax.set_ylabel('cumulative value of reward')
         self.scn.subplot_list[4].post_update_func = reward_screen_post_update
 
         # 5番グラフ
         self.scn.subplot_list[5].ax.set_xlim(0, 25)
-        self.scn.subplot_list[5].ax.set_ylim(-200, 150)
+        self.scn.subplot_list[5].ax.set_ylim(-400, 150)
         self.scn.subplot_list[5].ax.set_xlabel('action index')
         self.scn.subplot_list[5].ax.set_ylabel('Q value')
 
@@ -570,15 +570,24 @@ class training_base:
     def get_new_eb_pos(self):
         raise NotImplementedError()
 
+    def get_new_reset_pos(self):
+        return np.array([0.0, 0.0]).reshape(2,1)
+
 class training_type1(training_base):
     def check_end_status(self, obs, reward_map, status_get_eb_flag):
         self.set_end_status(status_get_eb_flag)
 
     def get_new_eb_pos(self):
         dist = 1.5 + self.try_count % (self.success_count%12+1)
-        if dist > TWN_BoxGardenEnv.wall_area_range * 0.8:
-            dist = TWN_BoxGardenEnv.wall_area_range * 0.8
+        if dist > TWN_BoxGardenEnv.wall_area_range * 0.9:
+            dist = TWN_BoxGardenEnv.wall_area_range * 0.9
         return np.array([0.0, dist]).reshape(2,1)
+
+    def get_new_reset_pos(self):
+        dist = 1.5 + self.try_count % (self.success_count%12+1)
+        if dist > TWN_BoxGardenEnv.wall_area_range * 0.9:
+            dist = TWN_BoxGardenEnv.wall_area_range * 0.9
+        return np.array([0.0, -dist]).reshape(2,1)
 
 class training_type2(training_base):
     def check_end_status(self, obs, reward_map, status_get_eb_flag):
@@ -586,8 +595,8 @@ class training_type2(training_base):
 
     def get_new_eb_pos(self):
         dist = 3.0 + self.try_count % (self.success_count%10+1)
-        if dist > TWN_BoxGardenEnv.wall_area_range * 0.8:
-            dist = TWN_BoxGardenEnv.wall_area_range * 0.8
+        if dist > TWN_BoxGardenEnv.wall_area_range * 0.0:
+            dist = TWN_BoxGardenEnv.wall_area_range * 0.9
         return my_car_obj.get_rot_mat( math.pi/180.0*(random.uniform(-9.0,9.0)) ).dot(np.array([0.0, random.uniform(3.0, dist)])).reshape(2,1)
 
 class training_type3(training_base):
@@ -596,8 +605,8 @@ class training_type3(training_base):
 
     def get_new_eb_pos(self):
         dist = 3.0 + self.try_count % (self.success_count%10+1)
-        if dist > TWN_BoxGardenEnv.wall_area_range * 0.8:
-            dist = TWN_BoxGardenEnv.wall_area_range * 0.8
+        if dist > TWN_BoxGardenEnv.wall_area_range * 0.9:
+            dist = TWN_BoxGardenEnv.wall_area_range * 0.9
         angle_range = 10.0 + self.success_count
         if angle_range > 80.0:
             angle_range = 80.0
@@ -618,6 +627,19 @@ class training_type5(training_base):
         self.set_end_status(status_get_eb_flag)
 
     def get_new_eb_pos(self):
+        dist = 3.0 + self.try_count % (self.success_count%12+1)
+        if dist > TWN_BoxGardenEnv.wall_area_range:
+            dist = TWN_BoxGardenEnv.wall_area_range
+        return np.random.uniform(-dist, dist, 2).reshape(2,1)
+
+    def get_new_reset_pos(self):
+        return None
+
+class training_type6(training_base):
+    def check_end_status(self, obs, reward_map, status_get_eb_flag):
+        self.set_end_status(status_get_eb_flag)
+
+    def get_new_eb_pos(self):
         ans = np.random.uniform(-1.0, 1.0, 2).reshape(2,1)
         if self.try_count%4 == 0:
             ans += np.array([ 9.0,  9.0]).reshape(2,1)
@@ -629,7 +651,7 @@ class training_type5(training_base):
             ans += np.array([-9.0,  9.0]).reshape(2,1)
         return ans
 
-class training_type6(training_type5):
+class training_type7(training_type5):
     def check_end_status(self, obs, reward_map, status_get_eb_flag):
         self.set_end_status(status_get_eb_flag)
 
@@ -646,6 +668,8 @@ class training_type6(training_type5):
             ans += np.array([-9.0,  9.0]).reshape(2,1)
         return ans
 
+    def get_new_reset_pos(self):
+        return None
 
 class TWN_BoxGardenEnv(gym.Env):
     eb_enagy = 300
@@ -712,7 +736,7 @@ class TWN_BoxGardenEnv(gym.Env):
         self.action_space_type = discrate_action    # True = 離散タイプ
         if self.action_space_type:
             self.logger.info("action Discrete")
-            self.action_space_divide = 4
+            self.action_space_divide = 2
             self.action_space_divide_plus1 = self.action_space_divide + 1
             self.action_space = spaces.Discrete(self.action_space_divide_plus1 * self.action_space_divide_plus1)
             if twn_operation_type == 0:
@@ -776,7 +800,7 @@ class TWN_BoxGardenEnv(gym.Env):
         
         self.reward_scalor = 1.0
         
-        self.trainers = [training_type1(), training_type2(), training_type3(), training_type4(), training_type5(), training_type6()]
+        self.trainers = [training_type1(), training_type2(), training_type3(), training_type4(), training_type5(), training_type6(), training_type7()]
         self.current_trainer = self.trainers[0]
         self.ob_return = None
         self.reward_map = None
@@ -1183,26 +1207,31 @@ class TWN_BoxGardenEnv(gym.Env):
         if self.get_eb_count < 50:
             self.training_step = 0
             self.current_trainer = self.trainers[0]
-        elif self.get_eb_count < 100:
+        elif self.get_eb_count < 125:
             self.training_step = 1
             self.current_trainer = self.trainers[self.try_count % 2]
         elif self.get_eb_count < 150:
             self.training_step = 2
             self.current_trainer = self.trainers[self.try_count % 3]
-        elif self.get_eb_count < 200:
+        elif self.get_eb_count < 175:
             self.training_step = 3
             self.current_trainer = self.trainers[self.try_count % 4]
-        elif self.get_eb_count < 300:
+        elif self.get_eb_count < 200:
             self.training_step = 4
             self.current_trainer = self.trainers[1+self.try_count % 4]
-        else:
+        elif self.get_eb_count < 250:
             self.training_step = 5
             self.current_trainer = self.trainers[2+self.try_count % 4]
+        else:
+            self.training_step = 6
+            self.current_trainer = self.trainers[3+self.try_count % 4]
         
-        if isinstance(self.current_trainer, training_type6):
+        reset_pos = self.current_trainer.get_new_reset_pos()
+        if reset_pos is None:
             self.twn.Reset2()
         else:
-            self.twn.Reset()
+            self.twn.Reset(new_pos=reset_pos)
+
         for collision_retry in range(10):
             new_pos = self.current_trainer.get_new_eb_pos()
             if not self.collision_eb(new_pos):

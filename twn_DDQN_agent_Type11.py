@@ -37,6 +37,7 @@ import success_buffer_replay
 import SuccessRateEpsilonGreedy
 import twn_model_base
 
+
 class Qfunc_FC_TWN2_Vision(chainer.ChainList):
     """AEによるレーダー情報分析層
 
@@ -114,6 +115,7 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
 
             self.conv = L.ConvolutionND(1, self.in_channel, self.out_channel, ksize=self.filter_size, stride=self.slide_size)
             self.dcnv = L.DeconvolutionND(1, self.out_channel, self.in_channel, ksize=self.filter_size, stride=self.slide_size)
+            # self.bnorm = L.BatchNormalization(self.out_channel)
             
 
     def gen_clasify_link(self, num_in_elements, num_in_channel, n_clasfy_ray, intermidiate_layers=[], dropout_rate=[], name=None):
@@ -145,16 +147,20 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
         for ie, oe, d in zip(forward_layer_unit_seq, forward_layer_unit_seq[1:], self.dropout_rate_list):
             nfl = L.Linear(ie, oe)
             nrl = L.Linear(oe, ie)
+            bn = L.BatchNormalization(oe)
             self.fwd_links.append(nfl)
             self.rev_links.append(nrl)
-            print('Layer {} {}: in: element {}, out: {}/{}'.format(name, i, ie, int(oe*(1.0-d)), oe))
+            self.bnorm_clasify.append(bn)
+            print('Rader analysis Layer {} {}: in: element {}, out: {}/{}'.format(name, i, ie, int(oe*(1.0-d)), oe))
             i += 1
         
 
     def __init__(self, num_ray, n_clasfy_ray):
         self.conv_dcnv_links = []
+        self.bnorm_conv = []
         self.fwd_links = []
         self.rev_links = []
+        self.bnorm_clasify = []
 
 
         self.num_ray = num_ray
@@ -192,31 +198,36 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
                 self.conv_dcnv_links[1].num_of_pooling_out_elements,
                 out_channel_2nd,
                 self.n_clasfy_ray,
-                [],
-                [],
+                [0.5, 0.1],
+                [0.0, 0.0],
                 name="Clasify")
 
-        self.debug_info = None
+        self.debug_info = {}
 
         super().__init__()
         for cdl in self.conv_dcnv_links:
             self.add_link(cdl.conv)
             self.add_link(cdl.dcnv)
-        for fl, rl in zip(self.fwd_links, self.rev_links):
+            # self.add_link(cdl.bnorm)
+        for fl, rl, bn in zip(self.fwd_links, self.rev_links, self.bnorm_clasify):
             self.add_link(fl)
             self.add_link(rl)
+            self.add_link(bn)
 
 
     def fwd(self, x):
         h_inout = x
         for cdl in self.conv_dcnv_links:
+            # h_inout = F.relu(cdl.bnorm(cdl.conv(h_inout)))
             h_inout = F.relu(cdl.conv(h_inout))
             h_inout = F.max_pooling_nd(h_inout, cdl.pooling_size)
 
-        for l, d in zip(self.fwd_links, self.dropout_rate_list):
-            h_inout = F.leaky_relu(l(h_inout))
+        for l, d, bn in zip(self.fwd_links, self.dropout_rate_list, self.bnorm_clasify):
+            h_inout = F.leaky_relu(bn(l(h_inout)))
             if d != 0.0:
                 h_inout = F.dropout(h_inout, d)
+        
+        self.debug_info['clasify_out'] = h_inout.array
         
         return h_inout
 
@@ -225,10 +236,12 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
         '''
         強化学習用のQ関数ではないので、普通にlossを返す
         '''
-        self.debug_info = []
+        self.debug_info['cnn_ae_out'] = []
+        self.debug_info['clasify_ae_out'] = []
         loss = None
         h_in = x
         for cdl in self.conv_dcnv_links:
+            # h_out = F.relu(cdl.bnorm(cdl.conv(h_in)))
             h_out = F.relu(cdl.conv(h_in))
             dcnv_out = cdl.dcnv(h_out)
             ls = F.mean_squared_error(dcnv_out, h_in)
@@ -237,12 +250,12 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
             else:
                 loss = loss + ls                    # 計算グラフ上は、正しいはず。
 
-            self.debug_info.append([h_out, ls, dcnv_out, h_in])
+            self.debug_info['cnn_ae_out'].append([h_out, ls, dcnv_out, h_in])   # デバッグ用に処理過程の情報を残す
             
             h_in = F.max_pooling_nd(chainer.Variable(h_out.array), cdl.pooling_size)
 
-        for fl, rl, d in zip(self.fwd_links, self.rev_links, self.dropout_rate_list):
-            h_out = F.leaky_relu(fl(h_in))
+        for fl, rl, d, bn in zip(self.fwd_links, self.rev_links, self.dropout_rate_list, self.bnorm_clasify):
+            h_out = F.leaky_relu(bn(fl(h_in)))
             #h_out = F.sigmoid(fl(h_in))
             if d != 0.0:
                 h_out = F.dropout(h_out, d)
@@ -250,7 +263,7 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
             ls = F.mean_squared_error(h_rout, h_in)
             loss = loss + ls                    # 計算グラフ上は、正しいはず。
 
-            self.debug_info.append([h_out, ls, h_rout, h_in])   # デバッグ用に処理過程の情報を残す
+            self.debug_info['clasify_ae_out'].append([h_out, ls, h_rout, h_in])   # デバッグ用に処理過程の情報を残す
 
             h_in = chainer.Variable(h_out.array)    # 後段の層からの逆伝搬が伝わらないように、次の層の入力データを改めて生成する
 
@@ -274,7 +287,7 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
         強化学習の対象となる層
         """
         
-        saved_attributes = ('l4','l5','action_chain_list')
+        saved_attributes = ('l4','l5','action_chain_list','bn1','bn2','bn3')
     
         def __init__(self, n_in_elements, n_actions, explor_rate=0.0):
             '''
@@ -291,8 +304,11 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
 
             super().__init__()
             with self.init_scope():
+                self.bn1 = L.BatchNormalization(n_in_elements)
                 self.l4 = links.MLP(n_in_elements, int(n_in_elements*1.2), (n_in_elements*2, int(n_in_elements*1.8), int(n_in_elements*1.5)), nonlinearity=F.leaky_relu)
+                self.bn2 = L.BatchNormalization(int(n_in_elements*1.2))
                 self.l5 = links.MLP(int(n_in_elements*1.2)+4, 4, (n_in_elements, int(n_in_elements*0.8), (n_in_elements*2)//3), nonlinearity=F.leaky_relu)
+                self.bn3 = L.BatchNormalization(4)
                 local_action_links_list = []
                 for i in range(n_actions):
                     action_links = links.MLP(4, 1, (n_in_elements//2,), nonlinearity=F.leaky_relu)
@@ -320,9 +336,9 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
             
             rdata = np.hstack([noise0, noise1, noise2, noise3]).astype(np.float32)
 
-            h4 = self.l4(x)
+            h4 = self.bn2(self.l4(self.bn1(x)))
             h4_c = F.concat([h4, chainer.Variable(rdata)], axis=1)
-            h5 = self.l5(h4_c)
+            h5 = self.bn3(self.l5(h4_c))
             action_Qvalues = []
             for act_mlp in self.action_chain_list:
                 qout = act_mlp(h5)
@@ -348,8 +364,13 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
 
 
 class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAgentMixin):
+    """エージェント本体
 
-    saved_attributes = ['cnn_ae', 'q_func', 'q_func_opt']
+    Args:
+        num_ray: TWNセンサーでとらえた周囲の状況を表すレーダーの本数
+        n_clasfy_ray: レーダー情報の分析結果の出力要素数
+    """
+    saved_attributes = ('agent', 'cnn_ae', 'cnn_ae_opt')
 
     def __init__(self, args, env, load_flag=False, explor_rate=None):
         super().__init__()
@@ -384,9 +405,9 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
             if explor_rate is None:
                 self.explorer = chainerrl.explorers.ConstantEpsilonGreedy(epsilon=0.05, random_action_func=env.action_space.sample)
             else:
-                self.explorer = SuccessRateEpsilonGreedy.SuccessRateEpsilonGreedy(start_epsilon=explor_rate, end_epsilon=0.05, decay_steps=50000, random_action_func=env.action_space.sample)
+                self.explorer = SuccessRateEpsilonGreedy.SuccessRateEpsilonGreedy(start_epsilon=explor_rate, end_epsilon=0.0, decay_steps=50000, random_action_func=env.action_space.sample)
         else:
-            self.explorer = SuccessRateEpsilonGreedy.SuccessRateEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.05, decay_steps=50000, random_action_func=env.action_space.sample)
+            self.explorer = SuccessRateEpsilonGreedy.SuccessRateEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.0, decay_steps=50000, random_action_func=env.action_space.sample)
     
         #replay_buffer = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedReplayBuffer(capacity=10 ** 6)
@@ -406,7 +427,6 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
             )
         
         self.t = 0
-        self.last_losses = None
 
     def set_success_rate(self, rate):
         self.success_rate = rate
@@ -454,7 +474,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         
         action = self.agent.act_and_train(h3_c, reward)
         
-        if (self.t % self.update_interval) == 0:
+        if (self.t % self.minibatch_size) == 0:
             if self.t > self.replay_start_size:
                 self.update()
         
@@ -516,31 +536,11 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         self.agent.stop_episode()
 
     def save(self, dirname):
-        """Save internal states.
-
-        Returns:
-            None
-        """
-        chainer.serializers.save_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
-#        i = 0
-#        for opt in self.cnn_ae_opts:
-#            opt.save(os.path.join(dirname, 'cnn_ae_opts', '{}'.format(i)))
-#            i += 1
-        self.agent.save(os.path.join(dirname, 'agent'))
-
+         agent.AttributeSavingMixin.save(self, dirname)
 
     def load(self, dirname):
-        """Load internal states.
+         agent.AttributeSavingMixin.load(self, dirname)
 
-        Returns:
-            None
-        """
-        chainer.serializers.load_npz(os.path.join(dirname, 'cnn_ae.npz'), self.cnn_ae)
-#        i = 0
-#        for opt in self.cnn_ae_opts:
-#            opt.load(os.path.join(dirname, 'cnn_ae_opts', '{}'.format(i)))
-#            i += 1
-        self.agent.load(os.path.join(dirname, 'agent'))
 
     def get_statistics(self):
         """Get statistics of the agent.
@@ -553,6 +553,11 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
             Example: [('average_loss': 0), ('average_value': 1), ...]
         """
         ans = []
+        # if self.hist_ana_ae.debug_info is not None:
+        #     ans = [di[1] for di in self.hist_ana_ae.debug_info]
+        #     #print(ans)
+        # else:
+        #     ans = []
 #        if self.last_losses is not None:
 #            ans.extend([('cnn1_loss', self.last_losses[0].data), ('cnn2_loss', self.last_losses[1].data), ('clasify_loss', self.last_losses[2].data)])
         ans.extend(self.agent.get_statistics())
@@ -560,24 +565,23 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
 
     def get_statistics_formated_string(self):
         stat = self.get_statistics()
+        stat_strings = []
+        # count = 1
+        # for t in stat:
+        #     stat_strings.append('({} layer:{: >7.2f})'.format(count, t[1]))
+        #     count += 1
         if hasattr(self.explorer, 'compute_epsilon'):
-            ans = '({}:{: >6.2f}), ({}: {: >5.2f}), (explorer rate({: >6}): {:>7.3%})'.format(
-                stat[0][0], 
-                stat[0][1], 
-                stat[1][0], 
-                stat[1][1], 
-                self.agent.t, 
-                self.explorer.compute_epsilon(self.agent.t)
-                )
+            stat_strings.append('(explorer rate({: >6}): {:>7.3%})'.format(self.agent.t, self.explorer.compute_epsilon(self.agent.t) ) )
         else:
-            ans = '({}:{: >6.2f}), ({}: {: >5.2f}), (explorer rate({: >6}))'.format(
-                stat[0][0], 
-                stat[0][1], 
-                stat[1][0], 
-                stat[1][1], 
-                self.agent.t
-                )
+            stat_strings.append('(explorer rate({: >6}): XX.X)'.format(self.agent.t) )
+
+        ans = ','.join(stat_strings)
+
         return ans
+
+
+
+
 
 
 def func_agent_generation(args, env, load_flag=False, explor_rate=None, load_name=None):
