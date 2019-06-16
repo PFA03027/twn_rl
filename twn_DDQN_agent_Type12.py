@@ -667,6 +667,8 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         h3_c = self.pre_layer_output(obs)
         
         self.agent.stop_episode_and_train(h3_c, reward, done)
+        self.replay_buffer_cnn_ae.stop_current_episode()
+        self.replay_buffer_hist_ana_ae.stop_current_episode()
         
         if self.t > self.replay_start_size:
             self.update_cnn_ae()
@@ -681,9 +683,9 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         Returns:
             None
         """
+        self.agent.stop_episode()
         self.replay_buffer_cnn_ae.stop_current_episode()
         self.replay_buffer_hist_ana_ae.stop_current_episode()
-        self.agent.stop_episode()
 
         self.clear_history_data()
 

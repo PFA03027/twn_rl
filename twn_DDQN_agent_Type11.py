@@ -386,7 +386,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
 
         self.success_rate = 1.0
 
-        gamma = 0.99
+        gamma = 0.985
         alpha = 0.5
         
         n_clasfy_ray = 32

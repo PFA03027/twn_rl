@@ -528,8 +528,8 @@ if __name__ == '__main__':
 #    func_agent_generation = twn_DDQN_agent_Type9.func_agent_generation
 #    func_agent_generation = twn_DDQN_agent_Type2_2.func_agent_generation
 #    func_agent_generation = twn_DDQN_agent_Type10.func_agent_generation
-    func_agent_generation = twn_DDQN_agent_Type11.func_agent_generation
-#    func_agent_generation = twn_DDQN_agent_Type12.func_agent_generation
+#    func_agent_generation = twn_DDQN_agent_Type11.func_agent_generation
+    func_agent_generation = twn_DDQN_agent_Type12.func_agent_generation
    
     if args.demo:
         func_demo(args, None, env_name, func_agent_generation)

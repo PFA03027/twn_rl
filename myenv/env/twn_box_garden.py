@@ -793,8 +793,10 @@ class TWN_BoxGardenEnv(gym.Env):
         self.old_ob2 = None
         self.old_ob3 = None
         self.old_dist = None
+        self.pre_pos = None
 
         self.cumulative_value_of_reward = 0.0
+        self.gamma = 0.985
         self.get_eb_count = 0
         self.collision_count = 0
         
@@ -990,7 +992,7 @@ class TWN_BoxGardenEnv(gym.Env):
         """ EBを取得できたときに限り、報酬がプラスとなる報酬体系とする。
 
         """
-
+        # ========= 状態に基づいた報酬 ==========
         reward_map = { 'enagy_status': self.twn.enagy/twn.TwoWheelMover.max_enagy -1.0 }
         reward_map['distance'] = self.ob3[2] -1.0
 
@@ -1002,7 +1004,11 @@ class TWN_BoxGardenEnv(gym.Env):
         ob3_angle = np.clip(ob3_angle, -math.pi, math.pi)
         # reward_map['angle'] = math.cos(ob3_angle)
         # ob3_angle = math.atan2( self.ob3[1], self.ob3[0])
-        reward_map['angle'] = (math.cos(ob3_angle) + 1.0) * self.ob3[2] - 2.0
+        reward_map['angle_dist'] = (math.cos(ob3_angle) + 1.0) * self.ob3[2] - 2.0
+
+        ob3_angle = math.atan2( self.ob3[1], self.ob3[0])
+        ob3_angle = np.clip(ob3_angle, -math.pi/2.0, math.pi/2.0)
+        reward_map['angle'] = math.cos(ob3_angle) * 0.5 - 0.5
 
         # 報酬を求める
         if eb_flag:  # ご飯にありつけた
@@ -1015,6 +1021,35 @@ class TWN_BoxGardenEnv(gym.Env):
 
         if self.twn.enagy <= 0.0:
             reward_map['enagy_zero'] = -10.0
+
+        # ========= 行動に基づいた報酬 ==========
+        # 移動しなかったら、負の報酬
+        reward_map['move_distance'] = 0.0
+        reward_map['distance_diff'] = 0.0
+        if self.pre_pos is not None:
+            mdist = np.linalg.norm(self.twn.pos - self.pre_pos)
+            if mdist < 1.0:
+                # 移動していないならば、-1.0
+                reward_map['move_distance'] = -1.0
+            else:
+                # 移動しているなら、位置情報を更新
+                self.pre_pos = self.twn.pos.copy()
+                # 移動していて、、、、
+                if self.ob3[2] < 0.2:
+                    # ある程度離れていたら、行動価値報酬をつける
+
+                    if self.old_dist is not None:
+                        if self.old_dist < self.ob3[2]:
+                            # かつ近づいているようなら、+の報酬
+                            reward_map['distance_diff'] = 0.2
+                else:
+                    reward_map['distance_diff'] = 0.2
+
+
+            self.old_dist = self.ob3[2].copy()
+
+        else:
+            self.pre_pos = self.twn.pos.copy()
 
         return reward_map
     
@@ -1059,7 +1094,7 @@ class TWN_BoxGardenEnv(gym.Env):
         #self.logger.info( 'reward: {}'.format(self.reward_map) )
         #print( 'reward: {}'.format(self.reward_map) )
         
-        self.cumulative_value_of_reward = reward + self.cumulative_value_of_reward * 0.95
+        self.cumulative_value_of_reward = reward + self.cumulative_value_of_reward * self.gamma
 #        self.cumulative_value_of_reward += reward
         return r_obs, reward, done, {'reward_map': self.reward_map, 'cumulative_reward': self.cumulative_value_of_reward, 'success_flag': success_flag }
     
