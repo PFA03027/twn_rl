@@ -312,8 +312,19 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
 
             super().__init__()
             with self.init_scope():
-#                self.ml5 = links.MLP(n_in_elements, n_actions, (n_in_elements*2, n_in_elements//2), nonlinearity=F.leaky_relu)
-                self.ml5 = links.MLP(n_in_elements, n_actions, (n_in_elements*2, n_actions*n_in_elements//2), nonlinearity=F.leaky_relu)
+                self.ml5 = links.MLP(
+                    n_in_elements, n_actions,
+                    (
+                        n_in_elements*2,
+                        int(n_in_elements*1.8),
+                        int(n_in_elements*1.5),
+                        int(n_in_elements*1.2),
+                        n_in_elements,
+                        int(n_in_elements*0.8),
+                        (n_in_elements*2)//3,
+                        (n_in_elements//2)*n_actions
+                        ),
+                        nonlinearity=F.leaky_relu)
 
             self.explor_rate = explor_rate
             
@@ -553,7 +564,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         return ans
 
 
-def func_agent_generation(args, env, load_flag=False, explor_rate=None, load_name=None):
+def func_agent_generation(args, env, load_flag=False, explor_rate=None):
     
     agent = MMAgent_DDQN(args, env, load_flag, explor_rate)
 

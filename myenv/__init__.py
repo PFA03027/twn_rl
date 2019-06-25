@@ -33,5 +33,13 @@ register(
     id='twm_box_garden-v6',
     entry_point='myenv.env:TWN_BoxGardenEnv6',
 )
+register(
+    id='twm_box_garden-v7',
+    entry_point='myenv.env:TWN_BoxGardenEnv7',
+)
+register(
+    id='twm_box_garden-v8',
+    entry_point='myenv.env:TWN_BoxGardenEnv8',
+)
 
 

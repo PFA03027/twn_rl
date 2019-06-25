@@ -323,7 +323,7 @@ def start_draw_side(bg_draw, mq, update_interval):
 
 
 class BoxGarden_draw_boot():
-    def __init__(self, bg_draw, update_interval=100):
+    def __init__(self, bg_draw, update_interval=200):
         '''
             第1引数  描画制御対象となるBoxGarden_draw
             第2引数  描画更新間隔[msec]

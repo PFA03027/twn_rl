@@ -150,7 +150,7 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
         
         """
     
-        def __init__(self, num_in_elements, num_in_channel, n_clasfy_ray, name=None, dropout_rate=0.0):
+        def __init__(self, num_in_elements, num_in_channel, n_clasfy_ray, name=None, dropout_rate=0.0, nonliner=F.sigmoid):
             '''
             num_in_elements: number of　output elements per output channel of CNN as input
             num_in_channel: number of　output channel of CNN as input
@@ -165,6 +165,8 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
             self.n_clasfy_ray = n_clasfy_ray
     
             self.dropout_rate = dropout_rate
+
+            self.nonliner = nonliner
     
             super().__init__()
             with self.init_scope():
@@ -173,9 +175,9 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
             
         def fwd(self, state):
             if self.dropout_rate == 0.0:
-                h1 = F.sigmoid(self.l_in(state))
+                h1 = self.nonliner(self.l_in(state))
             else:
-                h1 = F.dropout(F.sigmoid(self.l_in(state)), ratio=self.dropout_rate)
+                h1 = F.dropout(self.nonliner(self.l_in(state)), ratio=self.dropout_rate)
 
             return h1
 
@@ -192,7 +194,7 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
             '''
             return self.fwd_loss(state)[1]
 
-    saved_attributes = ("model1", "model2", "model3")
+    saved_attributes = ("model1", "model2", "model3", "model4", "model5", "model6", "model7")
 
     def __init__(self, num_ray, n_clasfy_ray):
 
@@ -232,10 +234,38 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
         self.model3 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Clasfy(
                 self.model2.num_of_pooling_out_elements,
                 out_channel_2nd,
-                self.n_clasfy_ray,
-                name="Clasify")
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.8),
+                name="Clasify1",
+                nonliner=F.leaky_relu)
 
-        self.model_list = [self.model1, self.model2, self.model3]
+        self.model4 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Clasfy(
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.8),
+                1,
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.6),
+                name="Clasify2",
+                nonliner=F.leaky_relu)
+
+        self.model5 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Clasfy(
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.6),
+                1,
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.4),
+                name="Clasify3",
+                nonliner=F.leaky_relu)
+
+        self.model6 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Clasfy(
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.4),
+                1,
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.2),
+                name="Clasify4",
+                nonliner=F.leaky_relu)
+
+        self.model7 = Qfunc_FC_TWN2_Vision.Qfunc_FC_TWN_model_AECNN_for_Clasfy(
+                int(self.model2.num_of_pooling_out_elements*out_channel_2nd*0.2),
+                1,
+                self.n_clasfy_ray,
+                name="Clasify5")
+
+        self.model_list = [self.model1, self.model2, self.model3, self.model4, self.model5, self.model6, self.model7]
         
         self.debug_info = None
         
@@ -243,8 +273,12 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
         h1 = F.max_pooling_nd(self.model1.fwd(x), self.pooling_size_1st)
         h2 = F.max_pooling_nd(self.model2.fwd(h1),self.pooling_size_2nd)
         h3 = self.model3.fwd(h2)
+        h4 = self.model4.fwd(h3)
+        h5 = self.model5.fwd(h4)
+        h6 = self.model6.fwd(h5)
+        h7 = self.model7.fwd(h6)
         
-        return h3
+        return h7
 
 
     def __call__(self, x):
@@ -256,10 +290,14 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
         model2_out = self.model2.fwd_loss(h1)
         h2 = F.max_pooling_nd(model2_out[0], self.pooling_size_2nd)
         model3_out = self.model3.fwd_loss(h2)
+        model4_out = self.model4.fwd_loss(model3_out[0])
+        model5_out = self.model5.fwd_loss(model4_out[0])
+        model6_out = self.model6.fwd_loss(model5_out[0])
+        model7_out = self.model7.fwd_loss(model6_out[0])
         
-        self.debug_info = (model1_out, model3_out, model3_out)
+        self.debug_info = (model1_out, model2_out, model3_out, model4_out, model5_out, model6_out, model7_out)
 
-        return [model1_out[1], model2_out[1], model3_out[1]]
+        return [model1_out[1], model2_out[1], model3_out[1], model4_out[1], model5_out[1], model6_out[1], model7_out[1]]
     
     def cleargrads(self):
         for m in self.model_list:
@@ -292,11 +330,13 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
         explor_rate=0.0: 探索行動比率（現時点で未使用）
     """
 
-    class Qfunc_FC_TWN_model_RLLayer(chainer.Chain):
+    class Qfunc_FC_TWN_model_RLLayer(chainer.Chain, agent.AttributeSavingMixin):
         """ 
         強化学習の対象となる層
         """
         
+        saved_attributes = ('l4','l5','action_chain_list')
+    
         def __init__(self, n_in_elements, n_actions, explor_rate=0.0):
             '''
             Q値の範囲が報酬体系によって負の値をとる場合、F.reluは負の値をとれないので、学習に適さない。
@@ -312,8 +352,13 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
 
             super().__init__()
             with self.init_scope():
-#                self.ml5 = links.MLP(n_in_elements, n_actions, (n_in_elements*2, n_in_elements//2), nonlinearity=F.leaky_relu)
-                self.ml5 = links.MLP(n_in_elements, n_actions, (n_in_elements*2, n_actions*n_in_elements//2), nonlinearity=F.leaky_relu)
+                self.l4 = links.MLP(n_in_elements, int(n_in_elements*1.2), (n_in_elements*2, int(n_in_elements*1.8), int(n_in_elements*1.5)), nonlinearity=F.leaky_relu)
+                self.l5 = links.MLP(int(n_in_elements*1.2)+4, (n_in_elements*2)//3, (n_in_elements, int(n_in_elements*0.8)), nonlinearity=F.leaky_relu)
+                local_action_links_list = []
+                for i in range(n_actions):
+                    action_links = links.MLP((n_in_elements*2)//3, 1, (n_in_elements//2,), nonlinearity=F.leaky_relu)
+                    local_action_links_list.append(action_links)
+                self.action_chain_list = chainer.ChainList(*local_action_links_list)
 
             self.explor_rate = explor_rate
             
@@ -326,7 +371,25 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
                 type: Variable of Chainer
                 Q values of all actions
             '''
-            h7 = self.ml5(x)
+
+            ss = list(x.shape)
+            ss[1] = 1
+            noise0 = np.random.normal( 0.0, 0.5, ss)
+            noise1 = np.random.normal(-1.0, 0.5, ss)
+            noise2 = np.random.normal( 1.0, 0.5, ss)
+            noise3 = np.random.uniform(low=-1.0, high=1.0, size=ss)
+            
+            rdata = np.hstack([noise0, noise1, noise2, noise3]).astype(np.float32)
+
+            h4 = self.l4(x)
+            h4_c = F.concat([h4, chainer.Variable(rdata)], axis=1)
+            h5 = self.l5(h4_c)
+            action_Qvalues = []
+            for act_mlp in self.action_chain_list:
+                qout = act_mlp(h5)
+                action_Qvalues.append(qout)
+            
+            h7 = F.concat(action_Qvalues, axis=1)
             
             self.debug_info = (h7)
     
@@ -359,7 +422,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         self.update_interval = 10
         self.target_update_interval = 200
         self.replay_start_size = 1000
-        self.minibatch_size = 256
+        self.minibatch_size = 512
 
         gamma = 0.99
         alpha = 0.5
@@ -378,14 +441,14 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
             if explor_rate is None:
                 explorer = chainerrl.explorers.ConstantEpsilonGreedy(epsilon=0.05, random_action_func=env.action_space.sample)
             else:
-                explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=explor_rate, end_epsilon=0.05, decay_steps=50000, random_action_func=env.action_space.sample)
+                explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=explor_rate, end_epsilon=0.05, decay_steps=500000, random_action_func=env.action_space.sample)
         else:
-            explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.05, decay_steps=50000, random_action_func=env.action_space.sample)
+            explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.05, decay_steps=500000, random_action_func=env.action_space.sample)
     
         #replay_buffer = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedEpisodicReplayBuffer(capacity=10 ** 6)
-        replay_buffer_q_func = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
+        replay_buffer_q_func = success_buffer_replay.ActionFareSamplingReplayBuffer(capacity=10 ** 6)
     
         phi = lambda x: x.astype(np.float32, copy=False)
         self.agent = chainerrl.agents.DoubleDQN(

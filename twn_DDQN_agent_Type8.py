@@ -292,11 +292,13 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
         explor_rate=0.0: 探索行動比率（現時点で未使用）
     """
 
-    class Qfunc_FC_TWN_model_RLLayer(chainer.Chain):
+    class Qfunc_FC_TWN_model_RLLayer(chainer.Chain, agent.AttributeSavingMixin):
         """ 
         強化学習の対象となる層
         """
         
+        saved_attributes = ('l4','action_chain_list')
+    
         def __init__(self, n_in_elements, n_actions, explor_rate=0.0):
             '''
             Q値の範囲が報酬体系によって負の値をとる場合、F.reluは負の値をとれないので、学習に適さない。
@@ -312,8 +314,12 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
 
             super().__init__()
             with self.init_scope():
-#                self.ml5 = links.MLP(n_in_elements, n_actions, (n_in_elements*2, n_in_elements//2), nonlinearity=F.leaky_relu)
-                self.ml5 = links.MLP(n_in_elements, n_actions, (n_in_elements*2, n_actions*n_in_elements//2), nonlinearity=F.leaky_relu)
+                self.l4 = links.MLP(n_in_elements, (n_in_elements*2)//3, (n_in_elements*2, int(n_in_elements*1.8), int(n_in_elements*1.5), int(n_in_elements*1.2), n_in_elements, int(n_in_elements*0.8)), nonlinearity=F.leaky_relu)
+                local_action_links_list = []
+                for i in range(n_actions):
+                    action_links = links.MLP((n_in_elements*2)//3, 1, (n_in_elements//2,), nonlinearity=F.leaky_relu)
+                    local_action_links_list.append(action_links)
+                self.action_chain_list = chainer.ChainList(*local_action_links_list)
 
             self.explor_rate = explor_rate
             
@@ -326,7 +332,13 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
                 type: Variable of Chainer
                 Q values of all actions
             '''
-            h7 = self.ml5(x)
+            h4 = self.l4(x)
+            action_Qvalues = []
+            for act_mlp in self.action_chain_list:
+                qout = act_mlp(h4)
+                action_Qvalues.append(qout)
+            
+            h7 = F.concat(action_Qvalues, axis=1)
             
             self.debug_info = (h7)
     
@@ -385,7 +397,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         #replay_buffer = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedEpisodicReplayBuffer(capacity=10 ** 6)
-        replay_buffer_q_func = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
+        replay_buffer_q_func = success_buffer_replay.ActionFareSamplingReplayBuffer(capacity=10 ** 6)
     
         phi = lambda x: x.astype(np.float32, copy=False)
         self.agent = chainerrl.agents.DoubleDQN(

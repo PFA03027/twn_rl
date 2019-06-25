@@ -171,6 +171,8 @@ class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
                 self.l_in = L.Linear(self.num_in_elements*self.num_in_channel, self.n_clasfy_ray) #クラス分類用
                 self.l_out = L.Linear(self.n_clasfy_ray, self.num_in_elements*self.num_in_channel) #クラス分類用
             
+            print('Layer {}: in: element {}  channel {}, out: {}'.format(name, self.num_in_elements, self.num_in_channel, self.n_clasfy_ray))
+            
         def fwd(self, state):
             if self.dropout_rate == 0.0:
                 h1 = F.sigmoid(self.l_in(state))
@@ -292,11 +294,13 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
         explor_rate=0.0: 探索行動比率（現時点で未使用）
     """
 
-    class Qfunc_FC_TWN_model_RLLayer(chainer.Chain):
+    class Qfunc_FC_TWN_model_RLLayer(chainer.Chain, agent.AttributeSavingMixin):
         """ 
         強化学習の対象となる層
         """
         
+        saved_attributes = ('l4','l5','action_chain_list')
+    
         def __init__(self, n_in_elements, n_actions, explor_rate=0.0):
             '''
             Q値の範囲が報酬体系によって負の値をとる場合、F.reluは負の値をとれないので、学習に適さない。
@@ -312,8 +316,13 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
 
             super().__init__()
             with self.init_scope():
-#                self.ml5 = links.MLP(n_in_elements, n_actions, (n_in_elements*2, n_in_elements//2), nonlinearity=F.leaky_relu)
-                self.ml5 = links.MLP(n_in_elements, n_actions, (n_in_elements*2, n_actions*n_in_elements//2), nonlinearity=F.leaky_relu)
+                self.l4 = links.MLP(n_in_elements, int(n_in_elements*1.2), (n_in_elements*2, int(n_in_elements*1.8), int(n_in_elements*1.5)), nonlinearity=F.leaky_relu)
+                self.l5 = links.MLP(int(n_in_elements*1.2)+4, 4, (n_in_elements, int(n_in_elements*0.8), (n_in_elements*2)//3), nonlinearity=F.leaky_relu)
+                local_action_links_list = []
+                for i in range(n_actions):
+                    action_links = links.MLP(4, 1, (n_in_elements//2,), nonlinearity=F.leaky_relu)
+                    local_action_links_list.append(action_links)
+                self.action_chain_list = chainer.ChainList(*local_action_links_list)
 
             self.explor_rate = explor_rate
             
@@ -326,7 +335,25 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
                 type: Variable of Chainer
                 Q values of all actions
             '''
-            h7 = self.ml5(x)
+
+            ss = list(x.shape)
+            ss[1] = 1
+            noise0 = np.random.normal( 0.0, 0.5, ss)
+            noise1 = np.random.normal(-1.0, 0.5, ss)
+            noise2 = np.random.normal( 1.0, 0.5, ss)
+            noise3 = np.random.uniform(low=-1.0, high=1.0, size=ss)
+            
+            rdata = np.hstack([noise0, noise1, noise2, noise3]).astype(np.float32)
+
+            h4 = self.l4(x)
+            h4_c = F.concat([h4, chainer.Variable(rdata)], axis=1)
+            h5 = self.l5(h4_c)
+            action_Qvalues = []
+            for act_mlp in self.action_chain_list:
+                qout = act_mlp(h5)
+                action_Qvalues.append(qout)
+            
+            h7 = F.concat(action_Qvalues, axis=1)
             
             self.debug_info = (h7)
     
@@ -359,7 +386,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         self.update_interval = 10
         self.target_update_interval = 200
         self.replay_start_size = 1000
-        self.minibatch_size = 256
+        self.minibatch_size = 512
 
         gamma = 0.99
         alpha = 0.5
@@ -378,14 +405,14 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
             if explor_rate is None:
                 explorer = chainerrl.explorers.ConstantEpsilonGreedy(epsilon=0.05, random_action_func=env.action_space.sample)
             else:
-                explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=explor_rate, end_epsilon=0.05, decay_steps=50000, random_action_func=env.action_space.sample)
+                explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=explor_rate, end_epsilon=0.05, decay_steps=500000, random_action_func=env.action_space.sample)
         else:
-            explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.05, decay_steps=50000, random_action_func=env.action_space.sample)
+            explorer = chainerrl.explorers.LinearDecayEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.05, decay_steps=500000, random_action_func=env.action_space.sample)
     
         #replay_buffer = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedReplayBuffer(capacity=10 ** 6)
         #replay_buffer = chainerrl.replay_buffer.PrioritizedEpisodicReplayBuffer(capacity=10 ** 6)
-        replay_buffer_q_func = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
+        replay_buffer_q_func = success_buffer_replay.ActionFareSamplingReplayBuffer(capacity=10 ** 6)
     
         phi = lambda x: x.astype(np.float32, copy=False)
         self.agent = chainerrl.agents.DoubleDQN(

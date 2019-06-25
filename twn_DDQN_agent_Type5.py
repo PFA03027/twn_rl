@@ -34,7 +34,7 @@ from chainerrl.action_value import DiscreteActionValue
 from chainerrl.agents import dqn
 
 import success_buffer_replay
-
+import twn_model_base
 
 class Qfunc_FC_TWN2_Vision(Qfunc.StateQFunction, agent.AttributeSavingMixin):
     """行動価値関数 = Q関数
@@ -471,7 +471,7 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
                 )
 
 
-class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
+class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAgentMixin):
 
     saved_attributes = ['cnn_ae', 'decompose_dae', 'q_func', 'q_func_opt']
 
@@ -723,14 +723,14 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin):
         return ans
 
 
-def func_agent_generation(args, env, load_flag=False, explor_rate=None):
+def func_agent_generation(args, env, load_flag=False, explor_rate=None, load_name=None):
     
     agent = MMAgent_DDQN(args, env, load_flag, explor_rate)
 
     #if len(args.load) > 0:
     if load_flag:
         #agent.load(args.load)
-        agent.load('agent')
+        agent.load('agent_{}'.format(load_name))
         #logger.debug('load: {}'.format(args.load) )
         print('load: {}'.format('agent') )
 

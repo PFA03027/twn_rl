@@ -52,7 +52,7 @@ class drawobj_base():
         drawobj_base.logger.error("No concrate class of drawobj set_data")
         return
 
-    def __init__( self, parent=None ):
+    def __init__( self, parent=None, plot_obj=None ):
         self.parent = parent    # 親オブジェクトへの参照
         self.child = []         # 子オブジェクトへの参照の集合
         self.id = idg._internal_id_singleton.get_new_id()
@@ -61,6 +61,9 @@ class drawobj_base():
 
         self.xx = []            # plot()のx軸座標情報の集合
         self.yy = []            # plot()のy軸座標情報の集合
+        self.plot_obj = plot_obj
+        self.color = None
+        self.line_style = None
 
         # y = scale * (rotmax * xx or yy) + move
         self.rot_theata = 0.0
@@ -115,11 +118,31 @@ class drawobj_base():
             self.effective_yy = self.yy
         
         # 描画情報を反映する
+        if (self.plot_obj is not None) and (self.color is not None):
+            self.plot_obj.set_color(self.color)
+            self.color = None
+        if (self.plot_obj is not None) and (self.line_style is not None):
+            self.plot_obj.set_color(self.line_style)
+            self.line_style = None
         self.set_data()
 
         # 子オブジェクトへ演算を伝搬させる
         for i_do in self.child:
             i_do.calc_effective_param()
+    
+    def set_color(self, color):
+        '''
+            Please see set_color() of matplotlib.lines.Line2D
+            https://matplotlib.org/api/_as_gen/matplotlib.lines.Line2D.html#matplotlib.lines.Line2D
+        '''
+        self.color = color
+
+    def set_line_style(self, style):
+        '''
+            Please see set_color() of matplotlib.lines.Line2D
+            https://matplotlib.org/api/_as_gen/matplotlib.lines.Line2D.html#matplotlib.lines.Line2D
+        '''
+        self.line_style = style
 
 
 class drawobj_empty(drawobj_base):
@@ -146,11 +169,12 @@ class drawobj_circle_point(drawobj_base):
     '''
         小さい円で点を表す描画オブジェクト
     '''
-    def __init__( self, ax, x, y, attr='bo', parent=None ):
+    def __init__( self, ax, x, y, parent=None, **kwargs ):
         self.x = [x]
         self.y = [y]
-        self.point, = ax.plot(self.x, self.y, attr, ms=4)
-        super().__init__(parent=parent)
+        kwargs.update({'marker':'o'})
+        self.point, = ax.plot(self.x, self.y, **kwargs)
+        super().__init__(parent=parent, plot_obj=self.point)
 
     def update( self, x, y ):
         self.x = [x]
@@ -174,11 +198,11 @@ class drawobj_line(drawobj_base):
     '''
         2点間を結ぶ直線を表す描画オブジェクト
     '''
-    def __init__( self, ax, x1, y1, x2, y2, attr='y-', parent=None ):
+    def __init__( self, ax, x1, y1, x2, y2, parent=None, **kwargs ):
         self.x = [x1, x2]
         self.y = [y1, y2]
-        self.line, = ax.plot(self.x, self.y, attr, ms=4)
-        super().__init__(parent=parent)
+        self.line, = ax.plot(self.x, self.y, **kwargs )     # , color='y', linestyle='-', markersize=4.0
+        super().__init__(parent=parent, plot_obj=self.line)
 
     def update( self, x1, y1, x2, y2 ):
         self.x = [x1, x2]
@@ -202,11 +226,11 @@ class drawobj_triangle(drawobj_base):
     '''
         三角形を表す描画オブジェクト
     '''
-    def __init__( self, ax, x1, y1, x2, y2, x3, y3, attr='y-', parent=None ):
+    def __init__( self, ax, x1, y1, x2, y2, x3, y3, parent=None, **kwargs ):
         self.x = [x1, x2, x3, x1]
         self.y = [y1, y2, y3, y1]
-        self.triangle, = ax.plot(self.x, self.y, attr, ms=4)
-        super().__init__(parent=parent)
+        self.triangle, = ax.plot(self.x, self.y, **kwargs )     # , color='y', linestyle='-', markersize=4.0
+        super().__init__(parent=parent, plot_obj=self.triangle)
         
     def update(self, x1, y1, x2, y2, x3, y3):
         self.x = [x1, x2, x3, x1]
@@ -230,11 +254,11 @@ class drawobj_poly(drawobj_base):
     '''
         複数点間を結ぶポリゴン描画オブジェクト
     '''
-    def __init__( self, ax, attr='g--', parent=None ):
+    def __init__( self, ax, parent=None, **kwargs ):
         self.x = []
         self.y = []
-        self.triangle, = ax.plot(self.x, self.y, attr)
-        super().__init__(parent=parent)
+        self.poly, = ax.plot(self.x, self.y, **kwargs)
+        super().__init__(parent=parent, plot_obj=self.poly)
         
     def append(self, x, y):
         self.x.append(x)
@@ -255,7 +279,7 @@ class drawobj_poly(drawobj_base):
         '''
             ポリゴンの座標を設定する
         '''
-        self.triangle.set_data(self.effective_xx, self.effective_yy)
+        self.poly.set_data(self.effective_xx, self.effective_yy)
         return
 
 class drawobj_circle(drawobj_base):
@@ -271,10 +295,10 @@ class drawobj_circle(drawobj_base):
             y[i] = b + r*np.sin(theta)
         return x, y
 
-    def __init__( self, ax, x1, y1, R, attr='g--', parent=None ):
+    def __init__( self, ax, x1, y1, R, parent=None, **kwargs ):
         self.x, self.y = self.circle(x1, y1, R)
-        self.circle_poly, = ax.plot(self.x, self.y, attr, ms=4)
-        super().__init__(parent=parent)
+        self.circle_poly, = ax.plot(self.x, self.y, **kwargs)
+        super().__init__(parent=parent, plot_obj=self.circle_poly)
         
     def update(self, a, b, r):
         self.x, self.y = self.circle(a, b, r)
@@ -291,6 +315,41 @@ class drawobj_circle(drawobj_base):
             円の座標を設定する
         '''
         self.circle_poly.set_data(self.effective_xx, self.effective_yy)
+        return
+
+class drawobj_arc(drawobj_base):
+    '''
+        円弧を表す描画オブジェクト
+    '''
+    def arc(self, a, b, r, s_angle, e_angle):
+        # 点(a,b)を中心とする半径rの円
+        T = 17
+        x, y = [0]*T, [0]*T
+        for i,theta in enumerate(np.linspace(s_angle, e_angle,T)):
+            x[i] = a + r*np.cos(theta)
+            y[i] = b + r*np.sin(theta)
+        return x, y
+
+    def __init__( self, ax, x1, y1, R, s_angle=0.0, e_angle=2*np.pi, parent=None, **kwargs ):
+        self.x, self.y = self.arc(x1, y1, R, s_angle, e_angle)
+        self.arc_poly, = ax.plot(self.x, self.y, **kwargs)      # , color='g', linestyle='--', markersize=4.0
+        super().__init__(parent=parent, plot_obj=self.arc_poly)
+        
+    def update(self, a, b, r, s_angle, e_angle):
+        self.x, self.y = self.arc(a, b, r, s_angle, e_angle)
+        
+    def get_xx_yy(self):
+        '''
+            円の変換対象座標情報を返す
+        '''
+        drawobj_base.debug_logger.info("drawobj_circle.get_xx_yy")
+        return self.x, self.y
+
+    def set_data(self):
+        '''
+            円の座標を設定する
+        '''
+        self.arc_poly.set_data(self.effective_xx, self.effective_yy)
         return
 
 
@@ -339,7 +398,7 @@ class screen():
         matplotでの描画機能を提供するクラス
         Windowの中に複数のグラフ描画領域を持つ
     '''
-    def __init__(self, subplot_num):
+    def __init__(self, subplot_num, window_title=None):
         '''
             matplotでの描画の初期化
             subplotをによる複数のグラフを準備できる。
@@ -348,6 +407,10 @@ class screen():
         '''
         self.id = idg._internal_id_singleton.get_new_id()
         self.fig = plt.figure(figsize=(10, 6))
+        if window_title is None:
+            self.fig.canvas.set_window_title('default title')
+        else:
+            self.fig.canvas.set_window_title(window_title)
         self.subplot_list = []
         subplot_num_count = 1
         for l in range(0,subplot_num[0]):   # 縦のループ
