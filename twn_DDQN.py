@@ -119,6 +119,8 @@ def training_log_graph(mq, window_title):
                 l.append(msg[0], sr)
 
             scn.update_subplot()
+            scn.fig.tight_layout()
+            
 
         except queue.Empty:
             pass
@@ -168,7 +170,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
         final_step = 0
         for t in range(max_number_of_steps):  #1試行のループ
             if isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN):
-                agent.set_success_rate(env.get_current_trainer().success_rate)
+                agent.set_success_rate(env.get_current_trainer().recent_success_rate)
             action = agent.act_and_train(observation, reward)
             reward = 0
             observation, reward, done, info = env.step(action)
@@ -176,17 +178,61 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
             #print('reward:', reward)
 
             if (t%10==0) or done:
-                tmp_add_info = None
+                tmp_add_info = {}
                 if isinstance(agent, chainerrl.agents.DoubleDQN):
                     av_data = agent.q_function.model.debug_info[0].data
-                    tmp_add_info = [av_data.reshape(1,-1)]
-                elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type8.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type9.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type10.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN):
+                    tmp_add_info['action_qval'] = av_data.reshape(1,-1)
+                elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type8.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type9.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type10.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
                     av_data = agent.agent.q_function.model.debug_info[0].data
-                    tmp_add_info = [av_data.reshape(1,-1)]
+                    tmp_add_info['action_qval'] = av_data.reshape(1,-1)
                     if agent.cnn_ae.debug_info is not None:
-                        #print('aaa--> ', agent.cnn_ae.debug_info[0][3].data.shape)
-                        #print('aaa--> ', agent.cnn_ae.debug_info[0][2].data.shape)
-                        tmp_add_info.extend([agent.cnn_ae.debug_info[0][3][0,:,:].reshape(-1), agent.cnn_ae.debug_info[0][2][0,:,:].reshape(-1)])
+                        if 'cnn_ae_out' in agent.cnn_ae.debug_info:
+                            tmp_add_info['rader_ae'] = {
+                                'in':  agent.cnn_ae.debug_info['cnn_ae_out'][0][3][0,:,:].reshape(-1),
+                                'rev': agent.cnn_ae.debug_info['cnn_ae_out'][0][2][0,:,:].reshape(-1),
+                                'out': agent.cnn_ae.debug_info['cnn_ae_out'][0][0][0,:,:].reshape(-1)
+                                }
+                        if 'clasify_ae_out' in agent.cnn_ae.debug_info:
+                            tmp_add_info['clasify_ae'] = {
+                                'in':  agent.cnn_ae.debug_info['clasify_ae_out'][-1][3][0,:].reshape(-1),
+                                'rev': agent.cnn_ae.debug_info['clasify_ae_out'][-1][2].data[0,:].reshape(-1),
+                                'out': agent.cnn_ae.debug_info['clasify_ae_out'][-1][0].data[0,:].reshape(-1)
+                                }
+                        if 'clasify_out' in agent.cnn_ae.debug_info:
+                            tmp_add_info['clasify_out'] = agent.cnn_ae.debug_info['clasify_out'][0,:].reshape(-1)
+                elif isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN):
+                    av_data = agent.agent.q_function.model.debug_info[0].data
+                    tmp_add_info['action_qval'] = av_data.reshape(1,-1)
+                    if agent.cnn_ae.debug_info is not None:
+                        if 'cnn_ae_out' in agent.cnn_ae.debug_info:
+                            tmp_add_info['rader_ae'] = {
+                                'in':  agent.cnn_ae.debug_info['cnn_ae_out'][0][3][0,:,:].reshape(-1),
+                                'rev': agent.cnn_ae.debug_info['cnn_ae_out'][0][2][0,:,:].reshape(-1),
+                                'out': agent.cnn_ae.debug_info['cnn_ae_out'][0][0][0,:,:].reshape(-1)
+                                }
+                        if 'clasify_ae_out' in agent.cnn_ae.debug_info:
+                            tmp_add_info['clasify_ae'] = {
+                                'in':  agent.cnn_ae.debug_info['clasify_ae_out'][-1][3][0,:].reshape(-1),
+                                'rev': agent.cnn_ae.debug_info['clasify_ae_out'][-1][2].data[0,:].reshape(-1),
+                                'out': agent.cnn_ae.debug_info['clasify_ae_out'][-1][0].data[0,:].reshape(-1)
+                                }
+                        if 'clasify_out' in agent.cnn_ae.debug_info:
+                            tmp_add_info['clasify_out'] = agent.cnn_ae.debug_info['clasify_out'][0,:].reshape(-1)
+
+                    if agent.hist_ana_ae.debug_info is not None:
+                        if 'ae_out' in agent.hist_ana_ae.debug_info:
+                            tmp_add_info['hist_ae_in'] = {
+                                'in':  agent.hist_ana_ae.debug_info['ae_out'][0][3][0,:].reshape(-1),
+                                'rev': agent.hist_ana_ae.debug_info['ae_out'][0][2].data[0,:].reshape(-1),
+                                'out': agent.hist_ana_ae.debug_info['ae_out'][0][0].data[0,:].reshape(-1)
+                            }
+                            tmp_add_info['hist_ae_out'] = {
+                                'in':  agent.hist_ana_ae.debug_info['ae_out'][-2][0][0,:].reshape(-1),
+                                'rev': agent.hist_ana_ae.debug_info['ae_out'][-1][2].data[0,:].reshape(-1),
+                                'out': agent.hist_ana_ae.debug_info['ae_out'][-1][0].data[0,:].reshape(-1)
+                            }
+                        if 'out' in agent.hist_ana_ae.debug_info:
+                            tmp_add_info['history_clasify_out'] = agent.hist_ana_ae.debug_info['out'][0,:].reshape(-1)
 
                 env.render(add_info=tmp_add_info)
                 logger.info('episode:{:>3} turn:{:>4} EB:{:>3} R:{: >7.1f}  Enagy:{: 6.1f} success rate:{:>4.0%} {:>3}/{:>3}, statistics[{}]'.format(
@@ -207,6 +253,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
         else:
             final_step = max_number_of_steps
 
+        env.finish_training()
         agent.stop_episode_and_train(observation, reward, done=True)
         stat = agent.get_statistics()
         logger.info('episode: {}  R: {}  statistics [(average_q: {}), (average_loss: {})]'.format(episode, R, stat[0][1], stat[1][1]))
@@ -260,11 +307,64 @@ def func_demo(args, mq, env_name, func_agent_generation):
                 #print('reward:', reward)
     
                 if (t%5==0) or done:
+                    tmp_add_info = {}
                     if isinstance(agent, chainerrl.agents.DoubleDQN):
                         av_data = agent.q_function.model.debug_info[0].data
-                    elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type2_2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type8.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type9.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type10.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
+                        tmp_add_info['action_qval'] = av_data.reshape(1,-1)
+                    elif isinstance(agent, twn_DDQN_agent_Type2.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type3.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type4.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type5.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type6.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type7.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type8.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type9.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type10.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN):
                         av_data = agent.agent.q_function.model.debug_info[0].data
-                    env.render(add_info=[av_data.reshape(1,-1)])
+                        tmp_add_info['action_qval'] = av_data.reshape(1,-1)
+                        if agent.cnn_ae.debug_info is not None:
+                            if 'cnn_ae_out' in agent.cnn_ae.debug_info:
+                                tmp_add_info['rader_ae'] = {
+                                    'in':  agent.cnn_ae.debug_info['cnn_ae_out'][0][3][0,:,:].reshape(-1),
+                                    'rev': agent.cnn_ae.debug_info['cnn_ae_out'][0][2][0,:,:].reshape(-1),
+                                    'out': agent.cnn_ae.debug_info['cnn_ae_out'][0][0][0,:,:].reshape(-1)
+                                    }
+                            if 'clasify_ae_out' in agent.cnn_ae.debug_info:
+                                tmp_add_info['clasify_ae'] = {
+                                    'in':  agent.cnn_ae.debug_info['clasify_ae_out'][-1][3][0,:].reshape(-1),
+                                    'rev': agent.cnn_ae.debug_info['clasify_ae_out'][-1][2].data[0,:].reshape(-1),
+                                    'out': agent.cnn_ae.debug_info['clasify_ae_out'][-1][0].data[0,:].reshape(-1)
+                                    }
+                            if 'clasify_out' in agent.cnn_ae.debug_info:
+                                tmp_add_info['clasify_out'] = agent.cnn_ae.debug_info['clasify_out'][0,:].reshape(-1)
+
+                    elif isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN):
+                        av_data = agent.agent.q_function.model.debug_info[0].data
+                        tmp_add_info['action_qval'] = av_data.reshape(1,-1)
+                        if agent.cnn_ae.debug_info is not None:
+                            if 'cnn_ae_out' in agent.cnn_ae.debug_info:
+                                tmp_add_info['rader_ae'] = {
+                                    'in':  agent.cnn_ae.debug_info['cnn_ae_out'][0][3][0,:,:].reshape(-1),
+                                    'rev': agent.cnn_ae.debug_info['cnn_ae_out'][0][2][0,:,:].reshape(-1),
+                                    'out': agent.cnn_ae.debug_info['cnn_ae_out'][0][0][0,:,:].reshape(-1)
+                                    }
+                            if 'clasify_ae_out' in agent.cnn_ae.debug_info:
+                                tmp_add_info['clasify_ae'] = {
+                                    'in':  agent.cnn_ae.debug_info['clasify_ae_out'][-1][3][0,:].reshape(-1),
+                                    'rev': agent.cnn_ae.debug_info['clasify_ae_out'][-1][2].data[0,:].reshape(-1),
+                                    'out': agent.cnn_ae.debug_info['clasify_ae_out'][-1][0].data[0,:].reshape(-1)
+                                    }
+                            if 'clasify_out' in agent.cnn_ae.debug_info:
+                                tmp_add_info['clasify_out'] = agent.cnn_ae.debug_info['clasify_out'][0,:].reshape(-1)
+
+                        if agent.hist_ana_ae.debug_info is not None:
+                            if 'ae_out' in agent.hist_ana_ae.debug_info:
+                                tmp_add_info['hist_ae_in'] = {
+                                    'in':  agent.hist_ana_ae.debug_info['ae_out'][0][3][0,:].reshape(-1),
+                                    'rev': agent.hist_ana_ae.debug_info['ae_out'][0][2].data[0,:].reshape(-1),
+                                    'out': agent.hist_ana_ae.debug_info['ae_out'][0][0].data[0,:].reshape(-1)
+                                }
+                                tmp_add_info['hist_ae_out'] = {
+                                    'in':  agent.hist_ana_ae.debug_info['ae_out'][-2][0][0,:].reshape(-1),
+                                    'rev': agent.hist_ana_ae.debug_info['ae_out'][-1][2].data[0,:].reshape(-1),
+                                    'out': agent.hist_ana_ae.debug_info['ae_out'][-1][0].data[0,:].reshape(-1)
+                                }
+                            if 'out' in agent.hist_ana_ae.debug_info:
+                                tmp_add_info['history_clasify_out'] = agent.hist_ana_ae.debug_info['out'][0,:].reshape(-1)
+
+                    env.render(add_info=tmp_add_info)
                     logger.info('episode:{:>3} turn:{:>4} EB:{:>3} R:{: >7.1f}  Enagy:{: 4.1f} success rate:{:>4.0%} {:>3}/{:>3}, statistics[{}]'.format(
                         episode,
                         t, 
@@ -279,6 +379,8 @@ def func_demo(args, mq, env_name, func_agent_generation):
 
                 if done:
                     break
+
+            env.finish_training()
             agent.stop_episode()
             stat = agent.get_statistics()
             logger.info('episode:{:>3} R:{: >7.1f}  Enagy:{: 4.1f}, statistics[{}]'.format(
@@ -333,6 +435,8 @@ def func_demo(args, mq, env_name, func_agent_generation):
                 
                             if done:
                                 break
+
+                        env.finish_training()
                         agent.stop_episode()
                         stat = agent.get_statistics()
                         logger.info('episode:{:>3} R:{: >7.1f}  Enagy:{: 4.1f}, statistics[{}]'.format(
