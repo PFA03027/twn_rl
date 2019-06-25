@@ -153,6 +153,9 @@ class my_car_obj(bg_obj.circle_object):
             self.cum_reward = dt2.drawobj_poly(ax5, color='b')
             self.cum_reward.append( 0.0, 0.0 )
             bg_draw.scn.subplot_list[self.plot_target_idx+4].append_drawobj(self.cum_reward)
+            self.snapshot_reward = dt2.drawobj_poly(ax5, color='g')
+            self.snapshot_reward.append( 0.0, 0.0 )
+            bg_draw.scn.subplot_list[self.plot_target_idx+4].append_drawobj(self.snapshot_reward)
 
             # 5番グラフ <- 3番グラフ
             ax7 = bg_draw.scn.subplot_list[self.plot_target_idx+5].ax
@@ -201,6 +204,8 @@ class my_car_obj(bg_obj.circle_object):
                         ts.set_color('c')
                     self.cum_reward.clear()
                     self.cum_reward.append( 0.0, 0.0 )
+                    self.snapshot_reward.clear()
+                    self.snapshot_reward.append( 0.0, 0.0 )
                     self.update_count = 0
                     self.qval_graph.clear()
                     self.qval_graph.append( 0.0, 0.0 )
@@ -237,7 +242,8 @@ class my_car_obj(bg_obj.circle_object):
 
                         # 4番グラフ
                         self.update_count += 1
-                        self.cum_reward.append( self.update_count, self.attrs[3] )
+                        self.cum_reward.append( self.update_count, self.attrs[3][0] )
+                        self.snapshot_reward.append( self.update_count, self.attrs[3][1]*10 - 100 )
                         
                         if self.attrs[4] is not None:
                             attrs_list = self.attrs[4]
@@ -1149,7 +1155,12 @@ class TWN_BoxGardenEnv(gym.Env):
             if self.ob1 is None:
                 self.my_car.update_pos_attrs(pos=self.twn.pos, rot_theata=self.twn.GetRotTheata(), attrs=[])
             else:
-                self.my_car.update_pos_attrs(pos=self.twn.pos, rot_theata=self.twn.GetRotTheata(), attrs=[self.ob1, self.ob2, self.ob3, self.cumulative_value_of_reward, add_info])
+                if self.reward_map is None:
+                    reward = 0.0
+                else:
+                    reward = sum(self.reward_map.values())*self.reward_scalor
+
+                self.my_car.update_pos_attrs(pos=self.twn.pos, rot_theata=self.twn.GetRotTheata(), attrs=[self.ob1, self.ob2, self.ob3, (self.cumulative_value_of_reward, reward), add_info])
                 if 'clasify_ae' in add_info:
                     self.clasify_ae_out_layer.update_pos_attrs(add_info['clasify_ae'])
                 if 'hist_ae_in' in add_info:

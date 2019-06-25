@@ -521,6 +521,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         
                 h3_c = np.hstack([twn_status, x_ray_out_np, eb_status])
         
+        self.replay_buffer_cnn_ae.stop_current_episode()
         self.agent.stop_episode_and_train(h3_c, reward, done)
         
         if self.t > self.replay_start_size:
