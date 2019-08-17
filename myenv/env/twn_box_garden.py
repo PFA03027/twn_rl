@@ -243,7 +243,7 @@ class my_car_obj(bg_obj.circle_object):
                         # 4番グラフ
                         self.update_count += 1
                         self.cum_reward.append( self.update_count, self.attrs[3][0] )
-                        self.snapshot_reward.append( self.update_count, self.attrs[3][1]*10 - 100 )
+                        self.snapshot_reward.append( self.update_count, self.attrs[3][1]*100 )
                         
                         if self.attrs[4] is not None:
                             attrs_list = self.attrs[4]
@@ -480,7 +480,7 @@ class twn_BoxGarden_draw(BoxGarden_draw.BoxGarden_draw):
 
         # 4番グラフ
         self.scn.subplot_list[4].ax.set_xlim(0.0, 300.0)
-        self.scn.subplot_list[4].ax.set_ylim(-400.0, 100.0)
+        self.scn.subplot_list[4].ax.set_ylim(-600.0, 100.0)
         self.scn.subplot_list[4].ax.set_xlabel('update count')
         self.scn.subplot_list[4].ax.set_ylabel('cumulative value of reward')
         self.scn.subplot_list[4].post_update_func = reward_screen_post_update
@@ -961,7 +961,6 @@ class TWN_BoxGardenEnv(gym.Env):
         # エネルギー体へ接近出来たら報酬
         reward_map['distance_diff'] = -1.0      # 接近できなければ-1
         if self.old_dist is not None:
-#            if (self.old_dist * 1.10) < self.ob3[2]:
             if (self.old_dist * 1.05) < self.ob3[2]:
                 # 前の位置よりも近づいているようなら、±0の報酬
                 reward_map['distance_diff'] = 0.0
@@ -1059,6 +1058,64 @@ class TWN_BoxGardenEnv(gym.Env):
 
         return reward_map
     
+    def step_calc_reward3(self, collision_count, eb_flag):
+        """ EBを取得できたときに限り、報酬がプラスとなる報酬体系とする。
+
+        """
+        # ========= 状態に基づいた報酬 ==========
+        reward_map = { 'enagy_status': self.twn.enagy/twn.TwoWheelMover.max_enagy -1.0 }
+        reward_map['distance'] = self.ob3[2] -1.0
+
+        reward_map['collision'] = -collision_count
+
+        # 十分に近づいたら、距離の情報は報酬にしない。EBを入手するには向きが重要。
+        ob3_angle = math.atan2( self.ob3[1], self.ob3[0])
+        ob3_angle *= 180.0/(20.0+160.0*(1.0-self.ob3[2]))
+        ob3_angle = np.clip(ob3_angle, -math.pi, math.pi)
+        reward_map['angle_dist'] = (math.cos(ob3_angle) + 1.0) * self.ob3[2] - 2.0
+
+        # ob3_angle = math.atan2( self.ob3[1], self.ob3[0])
+        # ob3_angle = np.clip(ob3_angle, -math.pi/2.0, math.pi/2.0)
+        # reward_map['angle'] = math.cos(ob3_angle) * 0.5 - 0.5
+
+        # 報酬を求める
+        if eb_flag:  # ご飯にありつけた
+            self.twn.enagy += TWN_BoxGardenEnv.eb_enagy
+            if self.twn.enagy > twn.TwoWheelMover.max_enagy:
+                self.twn.enagy = twn.TwoWheelMover.max_enagy
+
+            reward_map['enagy_up'] = TWN_BoxGardenEnv.eb_enagy / twn.TwoWheelMover.max_enagy * 100.0
+            reward_map['enagy_up'] += 1.0
+
+        if self.twn.enagy <= 0.0:
+            reward_map['enagy_zero'] = -10.0
+
+        # ========= 行動に基づいた報酬 ==========
+        # 移動しなかったら、負の報酬
+        reward_map['move_distance'] = 0.0
+        reward_map['distance_diff'] = 0.0
+        if self.pre_pos is not None:
+            mdist = np.linalg.norm(self.twn.pos - self.pre_pos)
+            if mdist < 0.5:
+                # 移動していないならば、-1.0
+                reward_map['move_distance'] = -1.0
+            else:
+                pre_dist = np.linalg.norm(self.eb.pos - self.pre_pos)
+                new_dist = np.linalg.norm(self.eb.pos - self.twn.pos)
+                # 移動しているならば、距離が改善した分を報酬とする。
+                reward_map['distance_diff'] = pre_dist - new_dist
+
+                # 移動しているなら、位置情報を更新
+                self.pre_pos = self.twn.pos.copy()
+
+            self.old_dist = self.ob3[2].copy()
+
+        else:
+            self.pre_pos = self.twn.pos.copy()
+        
+
+        return reward_map
+    
     
     #def _step(self, action):
     def step(self, action):
@@ -1075,8 +1132,9 @@ class TWN_BoxGardenEnv(gym.Env):
         self.ob_return = self.gather_observation(col_touch)
         
         # 報酬情報の収集
-#        self.reward_map = self.step_calc_reward(collision_count, self.eb_in_flag)
-        self.reward_map = self.step_calc_reward2(collision_count, self.eb_in_flag)
+        # self.reward_map = self.step_calc_reward(collision_count, self.eb_in_flag)
+        # self.reward_map = self.step_calc_reward2(collision_count, self.eb_in_flag)
+        self.reward_map = self.step_calc_reward3(collision_count, self.eb_in_flag)
 
         # 終了判定
         if self.eb_in_flag:  # ご飯にありつけた
