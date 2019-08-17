@@ -220,7 +220,8 @@ class ActionFareSamplingReplayBuffer(chainerrl.replay_buffer.AbstractReplayBuffe
             #ans.extend(random.sample(self.current_episode, n_s))
             ans.extend(self.current_episode[len(self.current_episode)-1-n_s:len(self.current_episode)-1])
 
-        return ans
+        # return ans
+        return [list([elem]) for elem in ans]
 
     def __len__(self):
         return self.all_step_count

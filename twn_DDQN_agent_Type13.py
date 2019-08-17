@@ -269,7 +269,101 @@ class Qfunc_FC_TWN2_Vision(chainer.ChainList):
 
         return loss
     
+class Qfunc_FC_TWN2_History(chainer.ChainList):
+    """入力情報の履歴からの分析層"""
 
+
+    def gen_clasify_link(self, num_in_elements, n_clasfy, intermidiate_layers=[], dropout_rate=[], name=None):
+        '''
+        num_in_elements: number of input elements
+        n_clasfy: number of clasify
+        intermidiate_layers: the list of intermidiate units rasio to the number of input units
+        Name: name of this layer
+        dropout_rate: dropout ratio of output layer. this is experimental purpose.
+        '''
+
+        self.dropout_rate_list = []
+
+        forward_layer_unit_seq = [num_in_elements]
+        for r, d in zip(intermidiate_layers, dropout_rate):
+            ne = int(((forward_layer_unit_seq[0] - n_clasfy) * r + n_clasfy)/(1.0-d))
+            forward_layer_unit_seq.append(ne)
+            self.dropout_rate_list.append(d)
+        forward_layer_unit_seq.append(n_clasfy)
+        self.dropout_rate_list.append(0.0)  # 最終層は、ドロップアウトなし
+
+        i = 0
+        for ie, oe, d in zip(forward_layer_unit_seq, forward_layer_unit_seq[1:], self.dropout_rate_list):
+            nfl = L.Linear(ie, oe)
+            nrl = L.Linear(oe, ie)
+            bn = L.BatchNormalization(oe)
+            self.fwd_links.append(nfl)
+            self.rev_links.append(nrl)
+            self.bnorm_clasify.append(bn)
+            print('History analysis Layer {} {}: in: element {}, out: {}/{}'.format(name, i, ie, int(oe*(1.0-d)), oe))
+            i += 1
+        
+
+    def __init__(self, num_in_elements, history_num, n_clasfy):
+        self.num_in_elements = num_in_elements * history_num
+        self.n_clasfy = n_clasfy
+        self.debug_info = {}
+
+        self.fwd_links = []
+        self.rev_links = []
+        self.bnorm_clasify = []
+        self.gen_clasify_link(
+                self.num_in_elements,
+                self.n_clasfy,
+                [0.7, 0.3, 0.1, 0.07, 0.03],
+                [0.0, 0.0, 0.0, 0.0 , 0.0],
+                name="Clasify")
+
+        super().__init__()
+        for fl, rl, bn in zip(self.fwd_links, self.rev_links, self.bnorm_clasify):
+            self.add_link(fl)
+            self.add_link(rl)
+            self.add_link(bn)
+        
+        self.non_liner = F.leaky_relu
+
+
+    def fwd(self, x):
+        h_inout = x
+        for l, d, bn in zip(self.fwd_links, self.dropout_rate_list, self.bnorm_clasify):
+            h_inout = self.non_liner(bn(l(h_inout)))
+            if d != 0.0:
+                h_inout = F.dropout(h_inout, d)
+        
+        self.debug_info['out'] = h_inout.array
+
+        return h_inout
+
+
+    def __call__(self, x):
+        '''
+        強化学習用のQ関数ではないので、普通にlossを返す
+        '''
+        self.debug_info['ae_out'] = []
+        loss = None
+        h_in = x
+        for fl, rl, d, bn in zip(self.fwd_links, self.rev_links, self.dropout_rate_list, self.bnorm_clasify):
+            h_out = self.non_liner(bn(fl(h_in)))
+            if d != 0.0:
+                h_out = F.dropout(h_out, d)
+            h_rout = F.reshape(rl(h_out), h_in.shape)
+            ls = F.mean_squared_error(h_rout, h_in)
+            if loss is None:
+                loss = ls
+            else:
+                loss = loss + ls                    # 計算グラフ上は、正しいはず。
+
+            self.debug_info['ae_out'].append([h_out, ls, h_rout, h_in])   # デバッグ用に処理過程の情報を残す
+
+            h_in = chainer.Variable(h_out.array)    # 後段の層からの逆伝搬が伝わらないように、次の層の入力データを改めて生成する
+
+        return loss
+    
 
 class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.AttributeSavingMixin):
     """行動価値関数 = Q関数
@@ -329,9 +423,9 @@ class Qfunc_FC_TWN_RL(Qfunc.SingleModelStateQFunctionWithDiscreteAction, agent.A
 
             ss = list(x.shape)
             ss[1] = 1
-            noise0 = np.random.normal( 0.0, 0.5, ss)
-            noise1 = np.random.normal(-1.0, 0.5, ss)
-            noise2 = np.random.normal( 1.0, 0.5, ss)
+            noise0 = np.random.normal( 0.0, 0.1, ss)
+            noise1 = np.random.normal(-1.0, 0.1, ss)
+            noise2 = np.random.normal( 1.0, 0.1, ss)
             noise3 = np.random.uniform(low=-1.0, high=1.0, size=ss)
             
             rdata = np.hstack([noise0, noise1, noise2, noise3]).astype(np.float32)
@@ -370,7 +464,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         num_ray: TWNセンサーでとらえた周囲の状況を表すレーダーの本数
         n_clasfy_ray: レーダー情報の分析結果の出力要素数
     """
-    saved_attributes = ('agent', 'cnn_ae', 'cnn_ae_opt')
+    saved_attributes = ('agent', 'cnn_ae', 'cnn_ae_opt', 'hist_ana_ae', 'hist_ana_ae_opt')
 
     def __init__(self, args, env, load_flag=False, explor_rate=None):
         super().__init__()
@@ -384,21 +478,38 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         self.replay_start_size = 1000
         self.minibatch_size = 512
 
+        self.history_num = 30
+        self.history_update_interval = 15
+        self.history_append_count = 0
+        self.history_data = []
+
         self.success_rate = 1.0
 
         gamma = 0.985
         alpha = 0.5
         
-        n_clasfy_ray = 32
+        n_clasfy_ray = 16
+
+        self.cnn_ae_output_elements = n_clasfy_ray
+        self.hist_ana_ae_output_elements = (self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status)//3
+        self.rl_layer_input_elements = self.n_size_twn_status + self.n_size_eb_status + self.cnn_ae_output_elements + self.hist_ana_ae_output_elements
 
 #        self.q_func = Qfunc_FC_TWN2_Vision(env.obs_size_list[0], env.obs_size_list[1], env.obs_size_list[2], env.action_space.n)
         self.cnn_ae = Qfunc_FC_TWN2_Vision(self.num_ray, n_clasfy_ray)
         self.cnn_ae_opt = chainer.optimizers.Adam()
         self.cnn_ae_opt.setup(self.cnn_ae)
         self.replay_buffer_cnn_ae = success_buffer_replay.SuccessPrioReplayBuffer(capacity=10 ** 6)
+#        self.replay_buffer_cnn_ae = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
+        self.cnn_ae_last_loss = None
 
-        self.q_func = Qfunc_FC_TWN_RL(self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status, env.action_space.n)
-        self.q_func_opt = chainer.optimizers.Adam(eps=1e-2)
+        self.hist_ana_ae = Qfunc_FC_TWN2_History(self.n_size_twn_status + n_clasfy_ray + self.n_size_eb_status, self.history_num, self.hist_ana_ae_output_elements)
+        self.hist_ana_ae_opt = chainer.optimizers.Adam()
+        self.hist_ana_ae_opt.setup(self.hist_ana_ae)
+        self.replay_buffer_hist_ana_ae = chainerrl.replay_buffer.ReplayBuffer(capacity=5000)
+        self.hist_ana_ae_last_out = None
+
+        self.q_func = Qfunc_FC_TWN_RL(self.rl_layer_input_elements, env.action_space.n)
+        self.q_func_opt = chainer.optimizers.Adam(eps=1e-3)
         self.q_func_opt.setup(self.q_func)
         self.explorer = None
         if load_flag:
@@ -409,9 +520,9 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         else:
             self.explorer = SuccessRateEpsilonGreedy.SuccessRateEpsilonGreedy(start_epsilon=0.5, end_epsilon=0.0, decay_steps=50000, random_action_func=env.action_space.sample)
     
-        #replay_buffer = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
-        #replay_buffer = chainerrl.replay_buffer.PrioritizedReplayBuffer(capacity=10 ** 6)
-        #replay_buffer = chainerrl.replay_buffer.PrioritizedEpisodicReplayBuffer(capacity=10 ** 6)
+        #replay_buffer_q_func = chainerrl.replay_buffer.ReplayBuffer(capacity=10 ** 6)
+        #replay_buffer_q_func = chainerrl.replay_buffer.PrioritizedReplayBuffer(capacity=10 ** 6)
+        #replay_buffer_q_func = chainerrl.replay_buffer.PrioritizedEpisodicReplayBuffer(capacity=10 ** 6)
         replay_buffer_q_func = success_buffer_replay.ActionFareSamplingReplayBuffer(capacity=10 ** 6)
     
         phi = lambda x: x.astype(np.float32, copy=False)
@@ -440,8 +551,48 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         eb_status = state32[self.n_size_twn_status+self.num_ray:self.n_size_twn_status+self.num_ray+self.n_size_eb_status]
         
         return twn_status, x, eb_status
+
+    def append_history_data(self, x, is_state_terminal=False):
+        self.history_data.append(x)
+        if len(self.history_data) == self.history_num:
+            xx = np.hstack(self.history_data)
+            self.replay_buffer_hist_ana_ae.append(xx, None, 0.0, is_state_terminal=is_state_terminal)
+            self.hist_ana_ae_last_out = self.hist_ana_ae.fwd(xx.reshape(1,-1))
+        elif len(self.history_data) > self.history_num:
+            self.history_data.pop(0)
+            self.history_append_count += 1
+            xx = np.hstack(self.history_data)
+            if self.history_append_count >= self.history_update_interval:
+                self.history_append_count = 0
+                self.replay_buffer_hist_ana_ae.append(xx, None, 0.0, is_state_terminal=is_state_terminal)
+                self.hist_ana_ae_last_out = self.hist_ana_ae.fwd(xx.reshape(1,-1))
+            else:
+                if is_state_terminal:
+                    self.replay_buffer_hist_ana_ae.append(xx, None, 0.0, is_state_terminal=is_state_terminal)
+
+
+        return self.hist_ana_ae_last_out
     
-    def update(self):
+    def clear_history_data(self):
+        self.history_append_count = 0
+        self.history_data = []
+        self.hist_ana_ae_last_loss = None
+        self.hist_ana_ae_last_out = None
+
+    def update_hist_ana_ae(self):
+        num_sample = self.minibatch_size
+        if len(self.replay_buffer_hist_ana_ae) < num_sample:
+            num_sample = len(self.replay_buffer_hist_ana_ae)
+        sample_obs = self.replay_buffer_hist_ana_ae.sample(num_sample)
+        obs_np = np.array([elem[0]['state'] for elem in sample_obs])
+        
+        self.hist_ana_ae.cleargrads()
+        self.hist_ana_ae_last_loss = self.hist_ana_ae(obs_np)
+        self.hist_ana_ae_last_loss.backward()
+        self.hist_ana_ae_opt.update()
+
+
+    def update_cnn_ae(self):
         sample_obs = self.replay_buffer_cnn_ae.sample(self.minibatch_size)
         obs_np = np.array([elem[0]['state'] for elem in sample_obs])
         
@@ -450,19 +601,13 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         self.cnn_ae_last_loss.backward()
         self.cnn_ae_opt.update()
 
-    def act_and_train(self, obs, reward):
-        """Select an action for training.
 
-        Returns:
-            ~object: action
-        """
-        self.t += 1
-        
+    def pre_layer_output(self, obs):
         twn_status, x, eb_status = self.obs_split_twn(obs)
 
         with chainer.using_config("train", False):
             with chainer.no_backprop_mode():
-                self.replay_buffer_cnn_ae.append(x, None, reward)
+                self.replay_buffer_cnn_ae.append(x, None, 0.0)
                 
                 ch, element = x.shape
                 x_ray_out = self.cnn_ae.fwd(x.reshape(1,ch,element))
@@ -470,15 +615,38 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         
                 h3_c = np.hstack([twn_status, x_ray_out_np, eb_status])
 
+                h3_h = self.append_history_data(h3_c)
+                while h3_h is None:
+                    h3_h = self.append_history_data(h3_c)
+
+                h3_h_np = h3_h.data.reshape(-1)
+
+                ans = np.hstack([twn_status, x_ray_out_np, eb_status, h3_h_np])
+        
+        return ans
+
+
+    def act_and_train(self, obs, reward):
+        """Select an action for training.
+
+        Returns:
+            ~object: action
+        """
+        self.t += 1
+
+        h3_c = self.pre_layer_output(obs)
+
         self.explorer.set_success_rate(self.success_rate)
         
         action = self.agent.act_and_train(h3_c, reward)
         
         if (self.t % self.minibatch_size) == 0:
             if self.t > self.replay_start_size:
-                self.update()
+                self.update_cnn_ae()
+                self.update_hist_ana_ae()
         
         return action
+
 
     def act(self, obs):
         """Select an action for evaluation.
@@ -486,22 +654,14 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         Returns:
             ~object: action
         """
-        twn_status, x, eb_status = self.obs_split_twn(obs)
-        
-        with chainer.using_config("train", False):
-            with chainer.no_backprop_mode():
-                ch, element = x.shape
-                x_ray_out = self.cnn_ae.fwd(x.reshape(1,ch,element))
-                x_ray_out_np = x_ray_out.data.reshape(-1)
-        
-                h3_c = np.hstack([twn_status, x_ray_out_np, eb_status])
+        h3_c = self.pre_layer_output(obs)
         
         action = self.agent.act(h3_c)
         
         return action
         
 
-    def stop_episode_and_train(self, state, reward, done=False):
+    def stop_episode_and_train(self, obs, reward, done=False):
         """Observe consequences and prepare for a new episode.
 
         Returns:
@@ -509,23 +669,18 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         """
         self.t += 1
 
-        twn_status, x, eb_status = self.obs_split_twn(state)
+        h3_c = self.pre_layer_output(obs)
         
-        with chainer.using_config("train", False):
-            with chainer.no_backprop_mode():
-                self.replay_buffer_cnn_ae.append(x, None, reward, next_state=None, next_action=None, is_state_terminal=done)
-        
-                ch, element = x.shape
-                x_ray_out = self.cnn_ae.fwd(x.reshape(1,ch,element))
-                x_ray_out_np = x_ray_out.data.reshape(-1)
-        
-                h3_c = np.hstack([twn_status, x_ray_out_np, eb_status])
-        
-        self.replay_buffer_cnn_ae.stop_current_episode()
         self.agent.stop_episode_and_train(h3_c, reward, done)
+        self.replay_buffer_cnn_ae.stop_current_episode()
+        self.replay_buffer_hist_ana_ae.stop_current_episode()
         
         if self.t > self.replay_start_size:
-            self.update()
+            self.update_cnn_ae()
+            self.update_hist_ana_ae()
+
+        self.clear_history_data()
+
 
     def stop_episode(self):
         """Prepare for a new episode.
@@ -533,8 +688,12 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
         Returns:
             None
         """
-        self.replay_buffer_cnn_ae.stop_current_episode()
         self.agent.stop_episode()
+        self.replay_buffer_cnn_ae.stop_current_episode()
+        self.replay_buffer_hist_ana_ae.stop_current_episode()
+
+        self.clear_history_data()
+
 
     def save(self, dirname):
          agent.AttributeSavingMixin.save(self, dirname)

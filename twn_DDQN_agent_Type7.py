@@ -572,7 +572,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
     def update(self):
         # レーダー信号の入力に対する特徴抽出層の学習処理
         sample_obs = self.replay_buffer_cnn_ae.sample(self.minibatch_size)
-        obs_np = np.array([elem['state'] for elem in sample_obs])
+        obs_np = np.array([elem[0]['state'] for elem in sample_obs])
         
         self.cnn_ae.cleargrads()
         self.last_losses = self.cnn_ae(obs_np)
@@ -584,7 +584,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
 
         # 入力信号に対する情報分階層の学習処理
         sample_obs = self.replay_buffer_decompose_dae.sample(self.minibatch_size)
-        obs_np = np.array([elem['state'] for elem in sample_obs])
+        obs_np = np.array([elem[0]['state'] for elem in sample_obs])
         
         self.decompose_dae.cleargrads()
         self.last_losses2 = self.decompose_dae(obs_np)

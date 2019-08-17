@@ -43,6 +43,7 @@ import twn_DDQN_agent_Type9
 import twn_DDQN_agent_Type10
 import twn_DDQN_agent_Type11
 import twn_DDQN_agent_Type12
+import twn_DDQN_agent_Type13
 
 import myenv.env.drawing_trace2 as dt2
 from matplotlib import animation
@@ -169,7 +170,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
         R = 0
         final_step = 0
         for t in range(max_number_of_steps):  #1試行のループ
-            if isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN):
+            if isinstance(agent, twn_DDQN_agent_Type11.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type13.MMAgent_DDQN):
                 agent.set_success_rate(env.get_current_trainer().recent_success_rate)
             action = agent.act_and_train(observation, reward)
             reward = 0
@@ -200,7 +201,7 @@ def func_traning(args, mq, env_name, func_agent_generation, mq_training_result_g
                                 }
                         if 'clasify_out' in agent.cnn_ae.debug_info:
                             tmp_add_info['clasify_out'] = agent.cnn_ae.debug_info['clasify_out'][0,:].reshape(-1)
-                elif isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN):
+                elif isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type13.MMAgent_DDQN):
                     av_data = agent.agent.q_function.model.debug_info[0].data
                     tmp_add_info['action_qval'] = av_data.reshape(1,-1)
                     if agent.cnn_ae.debug_info is not None:
@@ -330,7 +331,7 @@ def func_demo(args, mq, env_name, func_agent_generation):
                             if 'clasify_out' in agent.cnn_ae.debug_info:
                                 tmp_add_info['clasify_out'] = agent.cnn_ae.debug_info['clasify_out'][0,:].reshape(-1)
 
-                    elif isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN):
+                    elif isinstance(agent, twn_DDQN_agent_Type12.MMAgent_DDQN) or isinstance(agent, twn_DDQN_agent_Type13.MMAgent_DDQN):
                         av_data = agent.agent.q_function.model.debug_info[0].data
                         tmp_add_info['action_qval'] = av_data.reshape(1,-1)
                         if agent.cnn_ae.debug_info is not None:
@@ -529,7 +530,8 @@ if __name__ == '__main__':
 #    func_agent_generation = twn_DDQN_agent_Type2_2.func_agent_generation
 #    func_agent_generation = twn_DDQN_agent_Type10.func_agent_generation
 #    func_agent_generation = twn_DDQN_agent_Type11.func_agent_generation
-    func_agent_generation = twn_DDQN_agent_Type12.func_agent_generation
+#    func_agent_generation = twn_DDQN_agent_Type12.func_agent_generation
+    func_agent_generation = twn_DDQN_agent_Type13.func_agent_generation
    
     if args.demo:
         func_demo(args, None, env_name, func_agent_generation)

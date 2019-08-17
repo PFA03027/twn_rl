@@ -589,7 +589,7 @@ class MMAgent_DDQN(agent.Agent, agent.AttributeSavingMixin, twn_model_base.TWNAg
 
     def update_cnn_ae(self):
         sample_obs = self.replay_buffer_cnn_ae.sample(self.minibatch_size)
-        obs_np = np.array([elem['state'] for elem in sample_obs])
+        obs_np = np.array([elem[0]['state'] for elem in sample_obs])
         
         self.cnn_ae.cleargrads()
         self.cnn_ae_last_loss = self.cnn_ae(obs_np)
